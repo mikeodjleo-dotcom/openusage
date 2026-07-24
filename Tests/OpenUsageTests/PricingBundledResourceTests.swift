@@ -101,6 +101,27 @@ final class PricingBundledResourceTests: XCTestCase {
         XCTAssertEqual(sonnet5.outputPerMillion, sonnet46.outputPerMillion)
     }
 
+    /// Claude Opus 5: standard Opus-tier rates from the supplement (no public catalog lists it yet),
+    /// with the `[1m]`, thinking/effort, and fast slug variants resolving to the right entry.
+    func testClaudeOpus5PricingAndAliases() throws {
+        let pricing = Self.pricing
+        let opus5 = try XCTUnwrap(pricing.resolve(model: "claude-opus-5"))
+        XCTAssertEqual(opus5.inputPerMillion, 5.0)
+        XCTAssertEqual(opus5.cacheWritePerMillion, 6.25)
+        XCTAssertEqual(opus5.cacheReadPerMillion, 0.5)
+        XCTAssertEqual(opus5.outputPerMillion, 25.0)
+        XCTAssertEqual(pricing.resolve(model: "claude-opus-5[1m]"), opus5)
+        XCTAssertEqual(pricing.resolve(model: "claude-opus-5-thinking-xhigh"), opus5)
+
+        let opus5Fast = try XCTUnwrap(pricing.resolve(model: "claude-opus-5-thinking-high-fast"))
+        XCTAssertEqual(opus5Fast.inputPerMillion, opus5.inputPerMillion * 2)
+        XCTAssertEqual(opus5Fast.outputPerMillion, opus5.outputPerMillion * 2)
+
+        let opus48 = try XCTUnwrap(pricing.resolve(model: "claude-opus-4-8"))
+        XCTAssertEqual(opus5.inputPerMillion, opus48.inputPerMillion)
+        XCTAssertEqual(opus5.outputPerMillion, opus48.outputPerMillion)
+    }
+
     func testGPT56PricingAndAliases() throws {
         let pricing = Self.pricing
         let sol = try XCTUnwrap(pricing.resolve(model: "gpt-5.6-sol-ultra"))
