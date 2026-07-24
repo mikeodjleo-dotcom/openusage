@@ -126,6 +126,7 @@
     }
   },
   "fast_multipliers": {
+    "claude-opus-5": 2.0,
     "gpt-5": 2.0,
     "gpt-5.1-codex": 2.0,
     "gpt-5.1-codex-max": 2.0,
