@@ -12,7 +12,9 @@ enum ProviderCatalog {
     static func make(
         defaults: UserDefaults = .standard,
         claudeCards: [ClaudeAccountCard] = [],
-        defaultClaudeExtraLogRoots: [URL] = []
+        defaultClaudeExtraLogRoots: [URL] = [],
+        codexCards: [CodexAccountCard] = [],
+        defaultCodexExtraLogRoots: [URL] = []
     ) -> [ProviderRuntime] {
         // Default provider order (see AGENTS.md "## Providers"): the three established providers first,
         // then every other provider alphabetically by display name. Account cards slot in right after
@@ -32,8 +34,13 @@ enum ProviderCatalog {
         for card in claudeCards {
             runtimes.append(claudeAccountRuntime(card: card))
         }
+        runtimes.append(CodexProvider(
+            logUsageScanner: CodexLogUsageScanner(additionalHomes: defaultCodexExtraLogRoots)
+        ))
+        for card in codexCards {
+            runtimes.append(codexAccountRuntime(card: card))
+        }
         runtimes += [
-            CodexProvider(),
             CursorProvider(),
             AntigravityProvider(),
             CopilotProvider(defaults: defaults),
@@ -59,6 +66,18 @@ enum ProviderCatalog {
                 cacheIdentityOverride: "claude-account:\(card.id)",
                 rootsOverride: [URL(fileURLWithPath: card.configDirPath)] + card.extraLogRoots
             )
+        )
+    }
+
+    /// An extra Codex account runtime pinned to one OAuth home and its own session logs. The scoped
+    /// auth store disables the shared keychain fallback, preventing the default App account from
+    /// authenticating a CLI card.
+    private static func codexAccountRuntime(card: CodexAccountCard) -> CodexProvider {
+        let homes = [URL(fileURLWithPath: card.homePath)] + card.extraLogRoots
+        return CodexProvider(
+            provider: CodexProvider.makeProvider(id: card.id, displayName: card.displayName),
+            authStore: CodexAuthStore(scope: .home(path: card.homePath)),
+            logUsageScanner: CodexLogUsageScanner(homesOverride: homes)
         )
     }
 }

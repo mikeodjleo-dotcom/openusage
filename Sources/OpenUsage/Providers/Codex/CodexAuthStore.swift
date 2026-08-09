@@ -82,6 +82,16 @@ enum CodexAuthError: Error, LocalizedError, Equatable {
 }
 
 struct CodexAuthStore: Sendable {
+    enum Scope: Hashable, Sendable {
+        /// Historical behavior: resolve `CODEX_HOME`, then the standard homes, with the shared
+        /// keychain item as a fallback.
+        case automatic
+        /// One discovered Codex home. Credentials and token rotation stay pinned to this directory;
+        /// the shared keychain fallback is deliberately disabled so another account can never bleed
+        /// into this card.
+        case home(path: String)
+    }
+
     static let keychainService = "Codex Auth"
     /// Refresh once the access token is within this window of its JWT `exp` — the same 5-minute slack
     /// the `codex` CLI itself uses, so OpenUsage rotates on the same schedule rather than guessing.
@@ -93,17 +103,20 @@ struct CodexAuthStore: Sendable {
     var files: TextFileAccessing
     var keychain: KeychainAccessing
     var now: @Sendable () -> Date
+    var scope: Scope
 
     init(
         environment: EnvironmentReading = ProcessEnvironmentReader(),
         files: TextFileAccessing = LocalTextFileAccessor(),
         keychain: KeychainAccessing = SecurityKeychainAccessor(),
-        now: @escaping @Sendable () -> Date = Date.init
+        now: @escaping @Sendable () -> Date = Date.init,
+        scope: Scope = .automatic
     ) {
         self.environment = environment
         self.files = files
         self.keychain = keychain
         self.now = now
+        self.scope = scope
     }
 
     func loadAuthCandidates() -> [CodexAuthState] {
@@ -126,6 +139,7 @@ struct CodexAuthStore: Sendable {
     }
 
     func loadKeychainAuth() -> CodexAuthState? {
+        guard scope == .automatic else { return nil }
         guard let value = try? keychain.readGenericPassword(service: Self.keychainService),
               let auth = Self.parseAuth(value),
               Self.hasTokenLikeAuth(auth)
@@ -181,6 +195,9 @@ struct CodexAuthStore: Sendable {
     }
 
     func authPaths() -> [String] {
+        if case .home(let path) = scope {
+            return [joinPath(path, Self.authFile)]
+        }
         if let codexHome = codexHome() {
             return [joinPath(codexHome, Self.authFile)]
         }
@@ -188,6 +205,7 @@ struct CodexAuthStore: Sendable {
     }
 
     func codexHome() -> String? {
+        if case .home(let path) = scope { return path }
         guard let codexHome = environment.value(for: "CODEX_HOME")?.trimmingCharacters(in: .whitespacesAndNewlines),
               !codexHome.isEmpty
         else {
@@ -217,4 +235,3 @@ private extension CodexAuthState.Source {
         return false
     }
 }
-

@@ -6,7 +6,7 @@ name: Release
 # release-swift skill under .agents/skills/release-swift/.
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "aix-v*"]
   workflow_dispatch:
     inputs:
       tag:
@@ -47,13 +47,22 @@ jobs:
         run: |
           TAG="${{ inputs.tag }}"
           [ -z "$TAG" ] && TAG="${GITHUB_REF#refs/tags/}"
-          VERSION="${TAG#v}"
-          if [[ "$TAG" == *-* ]]; then CHANNEL=beta; PRERELEASE=true; else CHANNEL=stable; PRERELEASE=false; fi
+          if [[ "$TAG" == aix-v* ]]; then
+            VERSION="${TAG#aix-v}"
+            CHANNEL=stable
+            PRERELEASE=false
+            IS_AIX=true
+          else
+            VERSION="${TAG#v}"
+            IS_AIX=false
+            if [[ "$TAG" == *-* ]]; then CHANNEL=beta; PRERELEASE=true; else CHANNEL=stable; PRERELEASE=false; fi
+          fi
           {
             echo "tag=$TAG"
             echo "version=$VERSION"
             echo "channel=$CHANNEL"
             echo "prerelease=$PRERELEASE"
+            echo "is_aix=$IS_AIX"
           } >> "$GITHUB_OUTPUT"
 
       # Imports the Developer ID cert into a temporary keychain and adds it to the search list (cleaned up
@@ -80,6 +89,7 @@ jobs:
           echo "SPARKLE_PRIVATE_KEY_FILE=$RUNNER_TEMP/sparkle_ed_private_key" >> "$GITHUB_ENV"
 
       - name: Write iCloud provisioning profile
+        if: steps.meta.outputs.is_aix != 'true'
         env:
           ICLOUD_PROFILE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_ICLOUD_PROFILE }}
         run: |
@@ -120,7 +130,13 @@ jobs:
           NOTARY_APP_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           NOTARY_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           OPENUSAGE_VERSION: ${{ steps.meta.outputs.version }}
-        run: ./script/release.sh
+        run: |
+          if [ "${{ steps.meta.outputs.is_aix }}" = "true" ]; then
+            export OPENUSAGE_BUNDLE_ID="com.linchen.openusage.aix"
+            export OPENUSAGE_DISABLE_ICLOUD=1
+            export FEED_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/appcast.xml"
+          fi
+          ./script/release.sh
 
       # Upload the dSYM produced by release.sh so PostHog can symbolicate crash reports (the in-app
       # crash autocapture is anonymous and honors the Share-Anonymous-Usage opt-out; see docs/privacy.md).
@@ -154,7 +170,7 @@ jobs:
           files: dist/OpenUsage-${{ steps.meta.outputs.version }}.dmg
 
       - name: Preserve Tauri updater manifest on stable releases
-        if: steps.meta.outputs.channel == 'stable'
+        if: steps.meta.outputs.channel == 'stable' && steps.meta.outputs.is_aix != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.meta.outputs.tag }}

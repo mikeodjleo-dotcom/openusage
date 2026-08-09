@@ -265,7 +265,8 @@ struct WidgetGroupedListView: View {
             data: data,
             onToggleResetDisplay: { dataStore.resetDisplayMode.toggle() },
             onToggleMeterStyle: { dataStore.meterStyle.toggle() },
-            condensedTop: condensedTop
+            condensedTop: condensedTop,
+            codexResetClaim: container.codexResetClaims[providerID]
         )
             .contentShape(Rectangle())
             .opacity(isActive ? 0 : 1)

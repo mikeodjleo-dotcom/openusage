@@ -33,3 +33,5 @@ Update builds are published on OpenUsage's GitHub releases, and the list of avai
 signed two ways — Apple notarization plus OpenUsage's own signature — and the app refuses anything that
 doesn't match. This is only available in the official signed release build, not in local developer
 builds.
+
+A modified build must publish its own signed appcast. Pointing modified code at the official feed is unsafe because the next official update would replace the modification. The Aix distribution therefore keeps a separate bundle identity and feed while merging verified upstream changes; see [Aix distribution](aix-distribution.md).

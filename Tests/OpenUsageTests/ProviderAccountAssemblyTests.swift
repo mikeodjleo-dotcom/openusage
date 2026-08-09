@@ -78,6 +78,94 @@ final class ProviderAccountAssemblyTests: XCTestCase {
         )
     }
 
+    private func makeCodexDiscovery(
+        files: [String: String],
+        subdirectories: [String]
+    ) -> CodexHomeDiscovery {
+        CodexHomeDiscovery(
+            environment: FakeEnvironment([:]),
+            files: FakeFiles(files),
+            homeDirectory: { URL(fileURLWithPath: "/Users/dev") },
+            listSubdirectories: { url in
+                subdirectories
+                    .map { URL(fileURLWithPath: $0) }
+                    .filter { $0.deletingLastPathComponent().path == url.path }
+            }
+        )
+    }
+
+    func testDistinctCodexHomeBecomesAnIndependentCard() throws {
+        let defaults = makeScratchDefaults()
+        let store = ProviderAccountsStore(defaults: defaults)
+        let observer = DefaultAccountObserver(
+            environment: FakeEnvironment([:]),
+            files: FakeFiles([
+                "/Users/dev/.codex/auth.json": #"{"tokens":{"access_token":"app","account_id":"APP-ACCOUNT"}}"#,
+            ]),
+            keychain: FakeKeychain(nil),
+            homeDirectory: { URL(fileURLWithPath: "/Users/dev") }
+        )
+        let discovery = makeCodexDiscovery(
+            files: [
+                "/Users/dev/.codex-cli2/auth.json": #"{"tokens":{"access_token":"cli","account_id":"CLI-ACCOUNT"}}"#,
+            ],
+            subdirectories: ["/Users/dev/.codex-cli2"]
+        )
+
+        let assembly = ProviderAccountAssembly.make(
+            observer: observer, accountsStore: store, codexDiscovery: discovery
+        )
+
+        let card = try XCTUnwrap(assembly.codexCards.first)
+        XCTAssertTrue(card.id.hasPrefix("codex@"))
+        XCTAssertEqual(card.homePath, "/Users/dev/.codex-cli2")
+        XCTAssertEqual(assembly.identityKeysByCard["codex"], "app-account")
+        XCTAssertEqual(assembly.identityKeysByCard[card.id], "cli-account")
+        XCTAssertEqual(store.records.first { $0.id == card.id }?.sources.map(\.kind), [.codexHome])
+    }
+
+    func testSameCodexAccountAcrossHomesFoldsLogsOntoDefaultCard() throws {
+        let defaults = makeScratchDefaults()
+        let store = ProviderAccountsStore(defaults: defaults)
+        let observer = DefaultAccountObserver(
+            environment: FakeEnvironment([:]),
+            files: FakeFiles([
+                "/Users/dev/.codex/auth.json": #"{"tokens":{"access_token":"app","account_id":"SAME"}}"#,
+            ]),
+            keychain: FakeKeychain(nil),
+            homeDirectory: { URL(fileURLWithPath: "/Users/dev") }
+        )
+        let discovery = makeCodexDiscovery(
+            files: [
+                "/Users/dev/.codex-cli/auth.json": #"{"tokens":{"access_token":"copy","account_id":"SAME"}}"#,
+            ],
+            subdirectories: ["/Users/dev/.codex-cli"]
+        )
+
+        let assembly = ProviderAccountAssembly.make(
+            observer: observer, accountsStore: store, codexDiscovery: discovery
+        )
+
+        XCTAssertTrue(assembly.codexCards.isEmpty)
+        XCTAssertEqual(assembly.defaultCodexExtraLogRoots.map(\.path), ["/Users/dev/.codex-cli"])
+        let record = try XCTUnwrap(store.defaultBadgeHolder(family: "codex"))
+        XCTAssertEqual(Set(record.sources.map(\.kind)), [.defaultHome, .codexHome])
+    }
+
+    func testScopedCodexHomeNeverFallsBackToSharedKeychain() {
+        let store = CodexAuthStore(
+            environment: FakeEnvironment([:]),
+            files: FakeFiles([
+                "/Users/dev/.codex-cli2/auth.json": #"{"tokens":{"access_token":"cli","account_id":"CLI"}}"#,
+            ]),
+            keychain: FakeKeychain(#"{"tokens":{"access_token":"app","account_id":"APP"}}"#),
+            scope: .home(path: "/Users/dev/.codex-cli2")
+        )
+
+        XCTAssertEqual(store.loadAuthCandidates().first?.auth.tokens?.accountID, "CLI")
+        XCTAssertNil(store.loadKeychainAuth())
+    }
+
     func testADistinctConfigDirAccountMintsAHashedRecordAndAnExtraCard() throws {
         let defaults = makeScratchDefaults()
         let store = ProviderAccountsStore(defaults: defaults)

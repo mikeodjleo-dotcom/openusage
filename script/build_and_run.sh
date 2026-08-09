@@ -42,7 +42,9 @@ RESOURCE_BUNDLE_NAME="${TARGET_NAME}_${TARGET_NAME}.bundle"
 ENTITLEMENTS="$ROOT_DIR/script/OpenUsage.dev.entitlements.plist"
 SIGN_ENTITLEMENTS="$ROOT_DIR/script/OpenUsage.local.entitlements.plist"
 
-pkill -x "$TARGET_NAME" >/dev/null 2>&1 || true
+if [ "$MODE" != "build" ]; then
+  pkill -x "$TARGET_NAME" >/dev/null 2>&1 || true
+fi
 
 echo "==> swift build ($CONFIG)"
 swift build -c "$CONFIG"

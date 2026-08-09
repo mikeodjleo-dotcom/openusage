@@ -23,12 +23,13 @@ struct WidgetRowView: View {
     /// their neighbors — the list supplies it — and both densities use it to pull consecutive
     /// one-liners into a single cluster (Compact a step harder).
     var condensedTop: Bool = false
+    /// Account-scoped reset writer. Static/share/reorder rows leave this nil and remain read-only.
+    var codexResetClaim: CodexResetClaimService? = nil
 
     @AppStorage(DensitySetting.key) private var density = DensitySetting.regular
     @State private var modelHover = HoverPopoverState()
     /// Backs the resets popover's claim flow; `nil` outside the live dashboard (previews, share
     /// renders), which renders the timeline read-only.
-    @Environment(\.codexResetClaim) private var codexResetClaim
     /// Party easter egg: fill meter bars with the party gradient instead of the severity color. Off by
     /// default everywhere else.
     @Environment(\.popoverPartyMode) private var partyMode

@@ -44,6 +44,8 @@ struct ProviderAccountSource: Codable, Equatable, Sendable {
         case defaultHome
         /// A custom Claude config dir (a `CLAUDE_CONFIG_DIR` home kept besides the default).
         case configDir
+        /// An additional file-backed Codex home discovered beside the default login.
+        case codexHome
     }
 
     var kind: Kind

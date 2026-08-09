@@ -19,6 +19,15 @@ struct ClaudeAccountCard: Equatable, Sendable {
     var extraLogRoots: [URL] = []
 }
 
+/// One extra file-backed Codex account card. Its credential reads, token rotation, and local spend
+/// scan are all pinned to the listed homes.
+struct CodexAccountCard: Equatable, Sendable {
+    var id: String
+    var displayName: String
+    var homePath: String
+    var extraLogRoots: [URL] = []
+}
+
 /// The launch-time account pass: read which account is signed in at each family's default home,
 /// scan for extra Claude logins in custom config dirs, reconcile the account registry, and expose
 /// what the rest of launch consumes — the per-card identity map (snapshot-cache account stamp) and
@@ -34,6 +43,10 @@ struct ProviderAccountAssembly {
     /// Same-account custom config dirs discovered for the DEFAULT card's login: extra spend-log
     /// roots for the default scanner, never extra credentials.
     var defaultClaudeExtraLogRoots: [URL] = []
+    /// Extra Codex account cards found on this computer this launch, in stable id order.
+    var codexCards: [CodexAccountCard] = []
+    /// Additional homes carrying the default Codex account. Their logs fold into the default card.
+    var defaultCodexExtraLogRoots: [URL] = []
 
     /// `waitsForLoginShell`: true for the menu-bar app (a Finder/Dock launch inherits no shell
     /// exports, so the pass leans on the login-shell layers), false for the one-shot CLI (a terminal
@@ -74,7 +87,8 @@ struct ProviderAccountAssembly {
             observer: DefaultAccountObserver(),
             accountsStore: accountsStore ?? ProviderAccountsStore(defaults: defaults),
             families: families,
-            claudeDiscovery: ClaudeConfigDirDiscovery()
+            claudeDiscovery: ClaudeConfigDirDiscovery(),
+            codexDiscovery: CodexHomeDiscovery()
         )
     }
 
@@ -95,7 +109,8 @@ struct ProviderAccountAssembly {
         observer: DefaultAccountObserver,
         accountsStore: ProviderAccountsStore,
         families: Set<String> = ProviderAccountID.families,
-        claudeDiscovery: ClaudeConfigDirDiscovery? = nil
+        claudeDiscovery: ClaudeConfigDirDiscovery? = nil,
+        codexDiscovery: CodexHomeDiscovery? = nil
     ) -> ProviderAccountAssembly {
         var identityKeys: [String: String] = [:]
         var observations: [ProviderAccountsStore.AccountObservation] = []
@@ -180,6 +195,49 @@ struct ProviderAccountAssembly {
             }
         }
 
+        // Extra file-backed Codex homes. The same strict rule as Claude applies: an auth file must
+        // name its account before it may become a card. Homes resolving to the default identity only
+        // contribute additional local logs; distinct identities become independent cards.
+        var foundCodexAccounts: [(identityKey: String, label: String?, homes: [CodexHomeDiscovery.Finding])] = []
+        var defaultCodexExtraLogRoots: [URL] = []
+        let codexOutcome = outcomes.first { $0.family == "codex" }?.outcome
+        if let codexDiscovery, let codexOutcome {
+            if case .unresolved = codexOutcome {
+                AppLog.info(.config, "discovery: codex default login present but its identity is unreadable → skipping extra-account candidates this launch")
+            } else {
+                let defaultKey = identityKeys["codex"]
+                let scan = codexDiscovery.run()
+                for note in scan.notes { AppLog.info(.config, "discovery: \(note)") }
+                var order: [String] = []
+                var grouped: [String: [CodexHomeDiscovery.Finding]] = [:]
+                for finding in scan.findings {
+                    if grouped[finding.identityKey] == nil { order.append(finding.identityKey) }
+                    grouped[finding.identityKey, default: []].append(finding)
+                }
+                for identityKey in order {
+                    let findings = grouped[identityKey] ?? []
+                    let sources = findings.map {
+                        ProviderAccountSource(kind: .codexHome, anchor: $0.anchorPath, holdsDefaultSource: false)
+                    }
+                    if identityKey == defaultKey {
+                        defaultCodexExtraLogRoots += findings.map { URL(fileURLWithPath: $0.anchorPath) }
+                        if let index = observations.firstIndex(where: { $0.family == "codex" && $0.identityKey == identityKey }) {
+                            observations[index].sources += sources
+                        }
+                        AppLog.info(.config, "discovery: \(findings.count) home(s) fold onto the default codex card (same account)")
+                    } else {
+                        observations.append(ProviderAccountsStore.AccountObservation(
+                            family: "codex",
+                            identityKey: identityKey,
+                            label: findings.first?.label,
+                            sources: sources
+                        ))
+                        foundCodexAccounts.append((identityKey, findings.first?.label, findings))
+                    }
+                }
+            }
+        }
+
         let records = accountsStore.reconcile(with: observations)
 
         // The extra-card build plan: one card per distinct account found this launch, under its
@@ -210,10 +268,32 @@ struct ProviderAccountAssembly {
         }
         claudeCards.sort { $0.id < $1.id }
 
+        var codexCards: [CodexAccountCard] = []
+        for account in foundCodexAccounts {
+            guard let record = records.first(where: { $0.family == "codex" && $0.identityKey == account.identityKey }),
+                  let primary = account.homes.first
+            else { continue }
+            guard record.id != "codex" else {
+                AppLog.warn(.config, "discovery: the codex record's account now lives outside the default home; its card is unavailable until swap support lands")
+                continue
+            }
+            codexCards.append(CodexAccountCard(
+                id: record.id,
+                displayName: record.derivedDisplayName,
+                homePath: primary.anchorPath,
+                extraLogRoots: account.homes.dropFirst().map { URL(fileURLWithPath: $0.anchorPath) }
+            ))
+            identityKeys[record.id] = account.identityKey
+            AppLog.info(.config, "accounts: extra codex card \(record.id) from \(account.homes.count) home(s)")
+        }
+        codexCards.sort { $0.id < $1.id }
+
         return ProviderAccountAssembly(
             identityKeysByCard: identityKeys,
             claudeCards: claudeCards,
-            defaultClaudeExtraLogRoots: defaultClaudeExtraLogRoots
+            defaultClaudeExtraLogRoots: defaultClaudeExtraLogRoots,
+            codexCards: codexCards,
+            defaultCodexExtraLogRoots: defaultCodexExtraLogRoots
         )
     }
 }

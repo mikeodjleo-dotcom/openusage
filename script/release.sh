@@ -16,6 +16,9 @@ set -euo pipefail
 # Optional env:
 #   OPENUSAGE_BUILD       CFBundleVersion (monotonic). Default: git commit count.
 #   FEED_URL              appcast URL baked into the app. Default: GitHub Pages project URL.
+#   OPENUSAGE_BUNDLE_ID   bundle id override for a separately distributed fork.
+#   OPENUSAGE_DISABLE_ICLOUD=1  omit iCloud metadata/entitlements when the distributor does not
+#                         own the official CloudKit container. Official builds still require them.
 #   NOTARY_APPLE_ID / NOTARY_APP_PASSWORD / NOTARY_TEAM_ID   Apple ID, app-specific password, and team
 #                         ID for notarytool. When all three are set, the app and DMG are notarized + stapled.
 #   ALLOW_UNNOTARIZED=1   Skip notarization for a LOCAL dry run. Without it, missing notary creds is a
@@ -25,12 +28,15 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 : "${CODESIGN_IDENTITY:?set CODESIGN_IDENTITY to your Developer ID Application identity}"
-: "${ICLOUD_PROVISIONING_PROFILE:?set ICLOUD_PROVISIONING_PROFILE to the iCloud provisioning profile path}"
 : "${SPARKLE_PUBLIC_KEY:?set SPARKLE_PUBLIC_KEY to your base64 EdDSA public key}"
 : "${OPENUSAGE_VERSION:?set OPENUSAGE_VERSION, e.g. 0.7.0}"
 
 APP_NAME="OpenUsage"
-BUNDLE_ID="com.robinebers.openusage"
+BUNDLE_ID="${OPENUSAGE_BUNDLE_ID:-com.robinebers.openusage}"
+DISABLE_ICLOUD="${OPENUSAGE_DISABLE_ICLOUD:-0}"
+if [ "$DISABLE_ICLOUD" != "1" ]; then
+  : "${ICLOUD_PROVISIONING_PROFILE:?set ICLOUD_PROVISIONING_PROFILE to the iCloud provisioning profile path}"
+fi
 MIN_SYSTEM_VERSION="15.0"
 VERSION="$OPENUSAGE_VERSION"
 # CFBundleShortVersionString carries the full version, including any pre-release suffix (e.g.
@@ -184,23 +190,21 @@ cat >"$APP_CONTENTS/Info.plist" <<PLIST
   <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
   <key>SUEnableAutomaticChecks</key><true/>
   <key>SUScheduledCheckInterval</key><integer>3600</integer>
-  <key>NSUbiquitousContainers</key>
-  <dict>
-    <key>iCloud.com.robinebers.openusage</key>
-    <dict>
-      <key>NSUbiquitousContainerIsDocumentScopePublic</key><false/>
-      <key>NSUbiquitousContainerName</key><string>OpenUsage</string>
-      <key>NSUbiquitousContainerSupportedFolderLevels</key><string>None</string>
-    </dict>
-  </dict>
 </dict>
 </plist>
 PLIST
 
-cp "$ICLOUD_PROVISIONING_PROFILE" "$APP_CONTENTS/embedded.provisionprofile"
-"$ROOT_DIR/script/render_icloud_entitlements.sh" \
-  "$ENTITLEMENTS_TEMPLATE" "$ICLOUD_PROVISIONING_PROFILE" "$ENTITLEMENTS" \
-  "iCloud.com.robinebers.openusage"
+if [ "$DISABLE_ICLOUD" != "1" ]; then
+  /usr/libexec/PlistBuddy -c "Add :NSUbiquitousContainers dict" "$APP_CONTENTS/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :NSUbiquitousContainers:iCloud.com.robinebers.openusage dict" "$APP_CONTENTS/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :NSUbiquitousContainers:iCloud.com.robinebers.openusage:NSUbiquitousContainerIsDocumentScopePublic bool false" "$APP_CONTENTS/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :NSUbiquitousContainers:iCloud.com.robinebers.openusage:NSUbiquitousContainerName string OpenUsage" "$APP_CONTENTS/Info.plist"
+  /usr/libexec/PlistBuddy -c "Add :NSUbiquitousContainers:iCloud.com.robinebers.openusage:NSUbiquitousContainerSupportedFolderLevels string None" "$APP_CONTENTS/Info.plist"
+  cp "$ICLOUD_PROVISIONING_PROFILE" "$APP_CONTENTS/embedded.provisionprofile"
+  "$ROOT_DIR/script/render_icloud_entitlements.sh" \
+    "$ENTITLEMENTS_TEMPLATE" "$ICLOUD_PROVISIONING_PROFILE" "$ENTITLEMENTS" \
+    "iCloud.com.robinebers.openusage"
+fi
 
 # Embed + sign Sparkle (Developer ID, hardened runtime, secure timestamp).
 "$ROOT_DIR/script/embed_sparkle.sh" "$APP_BUNDLE" "$APP_BINARY" "$CODESIGN_IDENTITY" "--options runtime --timestamp"
@@ -208,11 +212,17 @@ codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$CLI
 
 echo "==> signing app (Developer ID, hardened runtime)"
 # Not --deep: the Sparkle framework is signed above and must keep that signature.
-codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
-  --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE"
+if [ "$DISABLE_ICLOUD" = "1" ]; then
+  codesign --force --options runtime --timestamp --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE"
+else
+  codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
+    --sign "$CODESIGN_IDENTITY" "$APP_BUNDLE"
+fi
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"
-codesign -d --entitlements :- "$APP_BUNDLE" 2>&1 | grep -q "iCloud.com.robinebers.openusage" \
-  || { echo "signed app is missing the production iCloud entitlement" >&2; exit 1; }
+if [ "$DISABLE_ICLOUD" != "1" ]; then
+  codesign -d --entitlements :- "$APP_BUNDLE" 2>&1 | grep -q "iCloud.com.robinebers.openusage" \
+    || { echo "signed app is missing the production iCloud entitlement" >&2; exit 1; }
+fi
 
 # Notarize + staple the app itself (not just the DMG) so it launches cleanly even offline after a
 # Sparkle update extracts it from the disk image.

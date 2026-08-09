@@ -1,0 +1,68 @@
+name: Aix Upstream Sync
+
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+    inputs:
+      force_release:
+        description: "Publish an Aix build even when upstream/main is already merged"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: aix-upstream-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app
+
+      - name: Merge upstream without rewriting fork history
+        id: merge
+        run: |
+          git remote add upstream https://github.com/robinebers/openusage.git
+          git fetch upstream main --tags
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already contains upstream/main."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git merge --no-edit upstream/main
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify merged source
+        if: steps.merge.outputs.changed == 'true' || inputs.force_release == true
+        run: swift test
+
+      - name: Push verified merge and release tag
+        if: steps.merge.outputs.changed == 'true' || inputs.force_release == true
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          BASE_TAG=""
+          while IFS= read -r candidate; do
+            if [[ "$candidate" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              BASE_TAG="$candidate"
+              break
+            fi
+          done < <(git tag -l 'v[0-9]*' --sort=-version:refname)
+          [ -n "$BASE_TAG" ] || { echo "No stable upstream v* tag found." >&2; exit 1; }
+          VERSION="${BASE_TAG#v}-aix.${GITHUB_RUN_NUMBER}"
+          TAG="aix-v$VERSION"
+          git tag -a "$TAG" -m "OpenUsage Aix $VERSION"
+          git push --atomic origin HEAD:main "$TAG"
