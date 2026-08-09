@@ -68,4 +68,4 @@ jobs:
           TAG="aix-v$VERSION"
           git tag -a "$TAG" -m "OpenUsage Aix $VERSION"
           git push --atomic origin HEAD:main "$TAG"
-          gh workflow run release.yml --ref main -f tag="$TAG"
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref main -f tag="$TAG"
