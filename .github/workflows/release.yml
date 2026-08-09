@@ -134,6 +134,7 @@ jobs:
           if [ "${{ steps.meta.outputs.is_aix }}" = "true" ]; then
             export OPENUSAGE_BUNDLE_ID="com.linchen.openusage.aix"
             export OPENUSAGE_DISABLE_ICLOUD=1
+            export ALLOW_UNNOTARIZED=1
             export FEED_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/appcast.xml"
           fi
           ./script/release.sh
