@@ -123,13 +123,14 @@ final class LayoutStore {
         self.registry = registry
         let persistence = LayoutPersistence(defaults: defaults, storageKey: storageKey)
         self.persistence = persistence
-        // Extra account cards seed their family's default metric set (and caret split); pins and the
-        // migration baseline are deliberately never translated (see `translatedForAccountCards`).
+        // Extra account cards seed their family's default metric set, caret split, and menu-bar pair.
+        // Each card is a distinct provider id, so the normal two-pin cap applies independently.
         let registryProviderIDs = registry.providers.map(\.id)
         let translatedMetricIDs = DefaultLayout.translatedForAccountCards(defaultMetricIDs, providerIDs: registryProviderIDs)
         let translatedExpandedIDs = DefaultLayout.translatedForAccountCards(defaultExpandedMetricIDs, providerIDs: registryProviderIDs)
+        let translatedPinnedIDs = DefaultLayout.translatedForAccountCards(defaultPinnedMetricIDs, providerIDs: registryProviderIDs)
         self.defaultMetricIDs = translatedMetricIDs
-        self.defaultPinnedMetricIDs = defaultPinnedMetricIDs
+        self.defaultPinnedMetricIDs = translatedPinnedIDs
         self.defaultExpandedMetricIDs = translatedExpandedIDs
         self.isProviderEnabled = isProviderEnabled
 
@@ -139,7 +140,7 @@ final class LayoutStore {
             defaults: LayoutDefaultSet(
                 metricIDs: translatedMetricIDs,
                 migrationBaselineMetricIDs: migrationBaselineMetricIDs,
-                pinnedMetricIDs: defaultPinnedMetricIDs,
+                pinnedMetricIDs: translatedPinnedIDs,
                 expandedMetricIDs: translatedExpandedIDs
             )
         )

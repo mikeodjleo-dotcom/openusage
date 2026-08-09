@@ -26,6 +26,8 @@ enum DefaultLayout {
         "grok.weekly", "grok.trend",
         "grok.payAsYouGo", "grok.today", "grok.yesterday", "grok.last30",
 
+        "kimi.session", "kimi.weekly",
+
         "opencode.session", "opencode.weekly", "opencode.monthly", "opencode.trend",
         "opencode.today", "opencode.yesterday", "opencode.last30",
 
@@ -64,6 +66,7 @@ enum DefaultLayout {
         "codex.session", "codex.weekly",
         "cursor.auto", "cursor.api",
         "copilot.premium",
+        "kimi.session", "kimi.weekly",
         "openrouter.credits",
         "zai.session", "zai.weekly"
     ]
@@ -71,9 +74,8 @@ enum DefaultLayout {
     /// Account-card-aware default list: for every extra account card in the registry
     /// (`claude@ab12cd34`), the family's entries are re-prefixed onto the card and appended, so a
     /// newly discovered account seeds the same metric set (and caret split) as its family's default
-    /// card. Pins are deliberately NOT translated — an extra account never claims menu-bar space by
-    /// default. `migrationBaselineMetricIDs` is deliberately NOT translated either: account-card ids
-    /// must always read as never-offered so their defaults seed the first time the card appears.
+    /// card. The caller chooses whether to translate pins too; the migration baseline stays untranslated
+    /// so account-card ids always read as never-offered and seed when the card first appears.
     static func translatedForAccountCards(_ ids: [String], providerIDs: [String]) -> [String] {
         let accountCardIDs = providerIDs.filter(ProviderAccountID.isAccountCard)
         guard !accountCardIDs.isEmpty else { return ids }

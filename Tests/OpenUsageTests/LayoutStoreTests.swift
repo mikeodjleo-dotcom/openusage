@@ -843,6 +843,7 @@ final class LayoutStoreTests: XCTestCase {
             store.defaultExpandedOnEnableIDs.contains("claude@work.sonnet"),
             "the caret split translates with the metric set"
         )
+        XCTAssertTrue(store.isPinned("claude@work.session"), "each account card gets its own menu-bar pair")
     }
 
     func testResetToDefaultRestoresProviderOrderAndMarksDefaultsSeeded() {
