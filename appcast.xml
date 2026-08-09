@@ -3,6 +3,14 @@
     <channel>
         <title>OpenUsage</title>
         <item>
+            <title>0.7.6-aix.2</title>
+            <pubDate>Sun, 09 Aug 2026 11:49:19 +0000</pubDate>
+            <sparkle:version>505</sparkle:version>
+            <sparkle:shortVersionString>0.7.6-aix.2</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <enclosure url="https://github.com/mikeodjleo-dotcom/openusage/releases/download/aix-v0.7.6-aix.2/OpenUsage-0.7.6-aix.2.dmg" length="20244752" type="application/octet-stream" sparkle:edSignature="jIMU8Q1jv9B1P33WDw/7jFrP86TV7je2TQ0ivpSSnd71Frbhphn/cTLKZBBIhDmA5BmRVeLsMtovWPPFMdNoCw=="/>
+        </item>
+        <item>
             <title>0.7.6-aix.1</title>
             <pubDate>Sun, 09 Aug 2026 06:37:38 +0000</pubDate>
             <sparkle:version>501</sparkle:version>
