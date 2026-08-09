@@ -114,7 +114,16 @@ jobs:
             git fetch origin gh-pages
             git show origin/gh-pages:appcast.xml > feed/appcast.xml \
               || { echo "gh-pages exists but appcast.xml is unreadable — aborting to protect the feed." >&2; exit 1; }
-            echo "Loaded existing appcast from gh-pages."
+            if [ "${{ steps.meta.outputs.is_aix }}" = "true" ] \
+              && ! grep -Fq "github.com/${{ github.repository }}/releases/download/aix-v" feed/appcast.xml; then
+              # GitHub forks may inherit the upstream gh-pages branch. Its items are signed with the
+              # upstream Sparkle key and must never enter the Aix feed. The first Aix release starts
+              # clean; later ones carry forward only a feed that already contains an Aix artifact.
+              rm feed/appcast.xml
+              echo "Ignoring inherited upstream appcast; starting the Aix feed fresh."
+            else
+              echo "Loaded existing appcast from gh-pages."
+            fi
           elif [ "$rc" -eq 2 ]; then
             echo "No gh-pages branch yet — starting a fresh feed."
           else
