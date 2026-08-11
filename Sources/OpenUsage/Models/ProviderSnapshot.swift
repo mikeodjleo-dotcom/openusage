@@ -1,5 +1,45 @@
 import Foundation
 
+/// Provider-owned account identity safe to expose through the local read-only API. `label` is the
+/// human account name when the provider supplies one (normally an email); `id` is the provider's
+/// stable opaque account id. Neither field ever contains an access token or credential fingerprint.
+struct ProviderAccountIdentity: Hashable, Sendable, Codable {
+    var label: String?
+    var id: String?
+
+    init?(label: String?, id: String?) {
+        let cleanLabel = label?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        let cleanID = id?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+        guard cleanLabel != nil || cleanID != nil else { return nil }
+        self.label = cleanLabel
+        self.id = cleanID
+    }
+
+    static func openIDUserInfo(_ data: Data) -> ProviderAccountIdentity? {
+        guard let object = ProviderParse.jsonObject(data) else { return nil }
+        return from(
+            object,
+            labelKeys: ["email", "preferred_username", "name"],
+            idKeys: ["sub", "user_id", "id"]
+        )
+    }
+
+    static func from(
+        _ object: [String: Any],
+        labelKeys: [String],
+        idKeys: [String]
+    ) -> ProviderAccountIdentity? {
+        ProviderAccountIdentity(
+            label: firstString(in: object, keys: labelKeys),
+            id: firstString(in: object, keys: idKeys)
+        )
+    }
+
+    private static func firstString(in object: [String: Any], keys: [String]) -> String? {
+        keys.lazy.compactMap { object[$0] as? String }.first { !$0.isEmpty }
+    }
+}
+
 /// Latest normalized output for one provider refresh.
 struct ProviderSnapshot: Hashable, Sendable, Codable {
     let providerID: String
@@ -8,6 +48,9 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     /// respond time (`LocalUsageAPI.State.resolvingDisplayNames`), so human-facing output carries
     /// renames without persisting them.
     var displayName: String
+    /// Account metadata returned by the provider. Claude/Codex snapshots are enriched at the local
+    /// API boundary from `ProviderAccountsStore`, keeping their cached snapshots rename-free.
+    var account: ProviderAccountIdentity?
     var plan: String?
     var lines: [MetricLine]
     var refreshedAt: Date
@@ -27,6 +70,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     init(
         providerID: String,
         displayName: String,
+        account: ProviderAccountIdentity? = nil,
         plan: String? = nil,
         lines: [MetricLine],
         refreshedAt: Date = Date(),
@@ -36,6 +80,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     ) {
         self.providerID = providerID
         self.displayName = displayName
+        self.account = account
         self.plan = plan
         self.lines = lines
         self.refreshedAt = refreshedAt
@@ -53,6 +98,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     /// so each call passes its own `now()`).
     static func make(
         provider: Provider,
+        account: ProviderAccountIdentity? = nil,
         plan: String?,
         lines: [MetricLine],
         refreshedAt: Date,
@@ -62,6 +108,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
         ProviderSnapshot(
             providerID: provider.id,
             displayName: provider.displayName,
+            account: account,
             plan: plan,
             lines: lines,
             refreshedAt: refreshedAt,

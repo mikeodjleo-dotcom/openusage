@@ -29,6 +29,7 @@ struct AntigravityUsageClient: Sendable {
     static let retrieveQuotaPath = "/v1internal:retrieveUserQuota"
     static let quotaSummaryPath = "/v1internal:retrieveUserQuotaSummary"
     static let googleOAuthURL = "https://oauth2.googleapis.com/token"
+    static let googleUserInfoURL = "https://openidconnect.googleapis.com/v1/userinfo"
     // Google OAuth "installed application" client credentials, extracted verbatim from the Antigravity
     // app bundle — the same pair the shipped app and the legacy Tauri plugin use. For installed-app OAuth
     // clients Google does not treat the "secret" as confidential (it ships in every copy of the client),
@@ -91,6 +92,22 @@ struct AntigravityUsageClient: Sendable {
             if response.statusCode == 401 || response.statusCode == 403 { return .authFailed }
             if (200..<300).contains(response.statusCode) { return .ok(response.body) }
         }
+        return .unavailable
+    }
+
+    /// Read the Google account already authorized by Antigravity. Uses the same outcome split as
+    /// Cloud Code so the provider only refreshes OAuth after a real 401/403, never after an outage.
+    func googleUserInfo(token: String) async -> CloudCodeOutcome {
+        guard let url = URL(string: Self.googleUserInfoURL) else { return .unavailable }
+        let request = HTTPRequest(
+            method: "GET",
+            url: url,
+            headers: ["Authorization": "Bearer \(token)", "Accept": "application/json"],
+            timeout: 10
+        )
+        guard let response = try? await http.send(request) else { return .unavailable }
+        if response.statusCode == 401 || response.statusCode == 403 { return .authFailed }
+        if (200..<300).contains(response.statusCode) { return .ok(response.body) }
         return .unavailable
     }
 

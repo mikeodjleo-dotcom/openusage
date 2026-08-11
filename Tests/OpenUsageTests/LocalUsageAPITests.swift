@@ -11,6 +11,7 @@ final class LocalUsageAPITests: XCTestCase {
         let claude = ProviderSnapshot(
             providerID: "claude",
             displayName: "Claude",
+            account: ProviderAccountIdentity(label: "mike@example.com", id: "acct_claude_1"),
             plan: "Pro",
             lines: [
                 .progress(label: "Session", used: 42, limit: 100, format: .percent,
@@ -47,6 +48,8 @@ final class LocalUsageAPITests: XCTestCase {
         let array = try XCTUnwrap(try json(response.body) as? [[String: Any]])
         XCTAssertEqual(array.map { $0["providerId"] as? String }, ["cursor", "claude"])
         XCTAssertEqual(array[1]["plan"] as? String, "Pro")
+        XCTAssertEqual(array[1]["account"] as? String, "mike@example.com")
+        XCTAssertEqual(array[1]["accountId"] as? String, "acct_claude_1")
         XCTAssertEqual(array[1]["fetchedAt"] as? String, "2026-03-26T11:16:29.000Z")
     }
 
@@ -142,6 +145,23 @@ final class LocalUsageAPITests: XCTestCase {
             "Cursor",
             "cards without a record keep their baked name"
         )
+    }
+
+    func testResolvedAccountsOverrideOnlyKnownCardsAtTheBoundary() throws {
+        let state = makeState().resolvingAccounts([
+            "claude": ProviderAccountIdentity(label: "renamed@example.com", id: "acct_claude_2")!
+        ])
+
+        let response = LocalUsageAPI.respond(method: "GET", path: "/v1/usage", state: state)
+        let array = try XCTUnwrap(try json(response.body) as? [[String: Any]])
+        let claude = try XCTUnwrap(array.first { $0["providerId"] as? String == "claude" })
+        let cursor = try XCTUnwrap(array.first { $0["providerId"] as? String == "cursor" })
+
+        XCTAssertEqual(claude["account"] as? String, "renamed@example.com")
+        XCTAssertEqual(claude["accountId"] as? String, "acct_claude_2")
+        XCTAssertNil(cursor["account"])
+        XCTAssertNil(cursor["accountId"])
+        XCTAssertEqual((cursor["lines"] as? [[String: Any]])?.count, 1)
     }
 
     func testMethodAndRouteErrors() throws {

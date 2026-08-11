@@ -55,6 +55,14 @@ final class GrokProviderTests: XCTestCase {
                 XCTAssertEqual(request.headers["Authorization"], "Bearer new-token")
                 return HTTPResponse(statusCode: 200, headers: [:], body: Data(#"{"subscription_tier_display":"SuperGrok Heavy"}"#.utf8))
             }
+            if request.url == GrokUsageClient.userInfoURL {
+                XCTAssertEqual(request.headers["Authorization"], "Bearer new-token")
+                return HTTPResponse(
+                    statusCode: 200,
+                    headers: [:],
+                    body: Data(#"{"sub":"grok-user-1","email":"mike@example.com"}"#.utf8)
+                )
+            }
             return HTTPResponse(statusCode: 404, headers: [:], body: Data())
         }
         let provider = GrokProvider(
@@ -68,6 +76,8 @@ final class GrokProviderTests: XCTestCase {
         let snapshot = await provider.refresh()
 
         XCTAssertEqual(snapshot.plan, "SuperGrok Heavy")
+        XCTAssertEqual(snapshot.account?.label, "mike@example.com")
+        XCTAssertEqual(snapshot.account?.id, "grok-user-1")
         XCTAssertEqual(progress(snapshot.lines, "Weekly limit")?.used, 99)
         XCTAssertEqual(badge(snapshot.lines, "Pay as you go")?.text, "Disabled")
 

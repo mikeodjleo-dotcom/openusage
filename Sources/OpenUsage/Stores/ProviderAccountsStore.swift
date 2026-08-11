@@ -215,6 +215,14 @@ final class ProviderAccountsStore {
         Dictionary(uniqueKeysWithValues: records.map { ($0.id, $0.resolvedDisplayName) })
     }
 
+    /// Card id → provider-owned identity for machine-readable local output. A user rename is never
+    /// an account label; this map only carries the observed email/org label and stable identity key.
+    var accountIdentitiesByCardID: [String: ProviderAccountIdentity] {
+        Dictionary(uniqueKeysWithValues: records.compactMap { record in
+            ProviderAccountIdentity(label: record.label, id: record.identityKey).map { (record.id, $0) }
+        })
+    }
+
     /// Stores a user rename for a card; `nil` or blank clears it back to the derived name.
     func rename(cardID: String, to name: String?) {
         guard let index = records.firstIndex(where: { $0.id == cardID }) else { return }

@@ -51,6 +51,38 @@ final class ProviderSnapshotCacheTests: XCTestCase {
                        .progress(label: "Session", used: 42, limit: 100, format: .percent))
     }
 
+    func testAccountIdentityRoundTripsAndLegacySnapshotsWithoutItStillDecode() throws {
+        let (defaults, suite) = makeDefaults()
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let now = Date()
+        let storageKey = "account-round-trip"
+        let cache = ProviderSnapshotCache(userDefaults: defaults, storageKey: storageKey, ttl: 9_999, now: { now })
+        var current = snapshot("alpha", used: 42, now: now)
+        current.account = ProviderAccountIdentity(label: "mike@example.com", id: "acct_1")
+        cache.store(current)
+
+        let reloaded = ProviderSnapshotCache(userDefaults: defaults, storageKey: storageKey, ttl: 9_999, now: { now })
+        XCTAssertEqual(reloaded.loadSnapshots(providerIDs: ["alpha"])["alpha"]?.account,
+                       ProviderAccountIdentity(label: "mike@example.com", id: "acct_1"))
+
+        // Optional account metadata was absent from every pre-upgrade snapshot. Removing it from the
+        // persisted JSON must keep the complete legacy snapshot readable rather than drop the cache.
+        let data = try XCTUnwrap(defaults.data(forKey: storageKey))
+        var root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var snapshots = try XCTUnwrap(root["snapshots"] as? [String: Any])
+        var alpha = try XCTUnwrap(snapshots["alpha"] as? [String: Any])
+        alpha.removeValue(forKey: "account")
+        snapshots["alpha"] = alpha
+        root["snapshots"] = snapshots
+        defaults.set(try JSONSerialization.data(withJSONObject: root), forKey: storageKey)
+
+        let legacy = ProviderSnapshotCache(userDefaults: defaults, storageKey: storageKey, ttl: 9_999, now: { now })
+        let decoded = try XCTUnwrap(legacy.loadSnapshots(providerIDs: ["alpha"])["alpha"])
+        XCTAssertNil(decoded.account)
+        XCTAssertEqual(decoded.lines.first,
+                       .progress(label: "Session", used: 42, limit: 100, format: .percent))
+    }
+
     /// #697 core guarantee: a snapshot persisted by a *previous* session and reloaded on launch must not
     /// satisfy the refresh gate, even when its `refreshedAt` is still well within TTL — otherwise the app
     /// would wait out the previous session's remaining interval before refetching. It must still *display*

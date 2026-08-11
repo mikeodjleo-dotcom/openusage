@@ -9,6 +9,10 @@ final class AgentBriefAPITests: XCTestCase {
         let root = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         XCTAssertEqual(root["schema"] as? String, "openusage.brief.v1")
+        let providers = try XCTUnwrap(root["providers"] as? [String: Any])
+        let claudeProvider = try XCTUnwrap(providers["claude"] as? [String: Any])
+        XCTAssertEqual(claudeProvider["account"] as? String, "claude@example.com")
+        XCTAssertEqual(claudeProvider["accountId"] as? String, "claude-user-1")
         let spend = try XCTUnwrap(root["spend"] as? [String: Any])
         let today = try XCTUnwrap(spend["today"] as? [String: Any])
         XCTAssertEqual(try XCTUnwrap(today["costUSD"] as? NSNumber).doubleValue, 45.44, accuracy: 0.001)
@@ -25,7 +29,7 @@ final class AgentBriefAPITests: XCTestCase {
         let data = AgentBriefAPI.markdown(providerIDs: state.enabledOrderedIDs, state: state)
         let output = try XCTUnwrap(String(data: data, encoding: .utf8))
 
-        XCTAssertTrue(output.contains("| Claude | Session | 95% |"))
+        XCTAssertTrue(output.contains("| Claude | claude@example.com | Session | 95% |"))
         XCTAssertTrue(output.contains("| Today | $45.44 | 61,490,886 |"))
         XCTAssertTrue(output.contains("| Codex CLI | $0.55 | 790,886 |"))
     }
@@ -35,6 +39,7 @@ final class AgentBriefAPITests: XCTestCase {
         let claude = ProviderSnapshot(
             providerID: "claude",
             displayName: "Claude",
+            account: ProviderAccountIdentity(label: "claude@example.com", id: "claude-user-1"),
             plan: "Max 20x",
             lines: [
                 .progress(label: "Session", used: 5, limit: 100, format: .percent,
@@ -53,6 +58,7 @@ final class AgentBriefAPITests: XCTestCase {
         let codex = ProviderSnapshot(
             providerID: "codex@cli",
             displayName: "Codex CLI",
+            account: ProviderAccountIdentity(label: nil, id: "codex-user-2"),
             plan: "Pro 20x",
             lines: [
                 .values(label: "Today", values: [

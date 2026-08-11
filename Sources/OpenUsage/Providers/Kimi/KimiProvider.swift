@@ -53,6 +53,7 @@ final class KimiProvider: ProviderRuntime {
             let mapped = try KimiUsageMapper.map(response.body)
             return ProviderSnapshot.make(
                 provider: provider,
+                account: mapped.account,
                 plan: mapped.plan,
                 lines: mapped.lines,
                 refreshedAt: now()

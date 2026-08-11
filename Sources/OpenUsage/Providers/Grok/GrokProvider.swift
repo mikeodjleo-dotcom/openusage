@@ -92,6 +92,7 @@ final class GrokProvider: ProviderRuntime {
         var mapped = try GrokUsageMapper.mapCreditsConfig(creditsResponse)
 
         let plan = await fetchPlanName(accessToken: state.token)
+        let account = await fetchAccountIdentity(accessToken: state.token)
 
         // Local spend tiles, read natively from the Grok CLI log and priced via the shared pricing
         // store. `scan` is awaited so its whole-file read + parse runs off the main actor.
@@ -116,11 +117,30 @@ final class GrokProvider: ProviderRuntime {
 
         return ProviderSnapshot.make(
             provider: provider,
+            account: account,
             plan: plan,
             lines: mapped.lines,
             refreshedAt: now(),
             usageHistory: usageHistory
         )
+    }
+
+    private func fetchAccountIdentity(accessToken: String) async -> ProviderAccountIdentity? {
+        do {
+            let response = try await usageClient.fetchUserInfo(accessToken: accessToken)
+            guard (200..<300).contains(response.statusCode) else {
+                AppLog.warn(LogTag.auth("grok"), "userinfo request failed (HTTP \(response.statusCode)); account metadata unavailable")
+                return nil
+            }
+            guard let account = ProviderAccountIdentity.openIDUserInfo(response.body) else {
+                AppLog.warn(LogTag.auth("grok"), "userinfo response carried no account identity")
+                return nil
+            }
+            return account
+        } catch {
+            AppLog.warn(LogTag.auth("grok"), "userinfo request failed: \(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func fetchCreditsConfigWithRetry(accessToken: String, state: inout GrokAuthState) async throws -> HTTPResponse {

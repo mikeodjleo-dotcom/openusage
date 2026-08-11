@@ -39,7 +39,7 @@ final class ProviderAccountAssemblyTests: XCTestCase {
         XCTAssertNil(store.defaultBadgeHolder(family: "codex"))
     }
 
-    func testDefaultCodexCardShowsItsAccountLabelWithoutChangingClaudeDefault() {
+    func testDefaultCodexCardShowsItsAccountLabelWithoutChangingClaudeDefault() throws {
         let source = ProviderAccountSource(
             kind: .defaultHome,
             anchor: "/Users/dev/.codex",
@@ -62,6 +62,13 @@ final class ProviderAccountAssemblyTests: XCTestCase {
 
         XCTAssertEqual(codex.derivedDisplayName, "Codex — mike@example.com")
         XCTAssertEqual(claude.derivedDisplayName, "Claude")
+
+        let defaults = makeScratchDefaults()
+        defaults.set(try JSONEncoder().encode([codex, claude]), forKey: ProviderAccountsStore.storageKey)
+        let identities = ProviderAccountsStore(defaults: defaults).accountIdentitiesByCardID
+        XCTAssertEqual(identities["codex"]?.label, "mike@example.com")
+        XCTAssertEqual(identities["codex"]?.id, "codex-acct-1")
+        XCTAssertEqual(identities["claude"]?.label, "mike@example.com")
     }
 
     func testDefaultCodexCardWithoutAnAccountLabelKeepsItsStockName() {

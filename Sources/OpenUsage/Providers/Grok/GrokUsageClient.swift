@@ -33,6 +33,7 @@ enum GrokUsageError: Error, LocalizedError, Equatable {
 
 struct GrokUsageClient: Sendable {
     static let settingsURL = URL(string: "https://cli-chat-proxy.grok.com/v1/settings")!
+    static let userInfoURL = URL(string: "https://auth.x.ai/oauth2/userinfo")!
     static let refreshURL = URL(string: "https://auth.x.ai/oauth2/token")!
     static let tokenAuthHeader = "xai-grok-cli"
 
@@ -81,6 +82,19 @@ struct GrokUsageClient: Sendable {
         ))
     }
 
+    func fetchUserInfo(accessToken: String) async throws -> HTTPResponse {
+        try await httpClient.send(HTTPRequest(
+            method: "GET",
+            url: Self.userInfoURL,
+            headers: [
+                "Authorization": "Bearer \(accessToken.trimmingCharacters(in: .whitespacesAndNewlines))",
+                "Accept": "application/json",
+                "User-Agent": "OpenUsage"
+            ],
+            timeout: 10
+        ))
+    }
+
     func decodeRefreshResponse(_ response: HTTPResponse) -> GrokRefreshResponse? {
         try? JSONDecoder().decode(GrokRefreshResponse.self, from: response.body)
     }
@@ -94,4 +108,3 @@ struct GrokUsageClient: Sendable {
         ]
     }
 }
-

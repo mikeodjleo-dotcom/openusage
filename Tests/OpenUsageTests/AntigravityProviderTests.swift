@@ -303,6 +303,13 @@ final class AntigravityProviderTests: XCTestCase {
 
         let routing = RoutingHTTPClient { request in
             let path = request.url.path
+            if request.url.absoluteString == AntigravityUsageClient.googleUserInfoURL {
+                return HTTPResponse(
+                    statusCode: 200,
+                    headers: [:],
+                    body: Data(#"{"sub":"google-user-1","email":"mike@example.com"}"#.utf8)
+                )
+            }
             // Builds without the summary RPC 404 it — this test also covers summary-404 → legacy.
             if path.contains("retrieveUserQuotaSummary") {
                 return HTTPResponse(statusCode: 404, headers: [:], body: Data())
@@ -327,6 +334,8 @@ final class AntigravityProviderTests: XCTestCase {
 
         let snapshot = await provider.refresh()
         XCTAssertEqual(snapshot.plan, "Pro")
+        XCTAssertEqual(snapshot.account?.label, "mike@example.com")
+        XCTAssertEqual(snapshot.account?.id, "google-user-1")
         // Legacy per-model data merges into the two pool meters (worst fraction per pool).
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Claude"])
         XCTAssertEqual(used(snapshot.lines[0]), 60)

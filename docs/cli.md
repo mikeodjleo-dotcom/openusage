@@ -23,12 +23,15 @@ openusage brief --json --force
 ```
 
 The JSON schema is `openusage.brief.v1`. Its `providers` object uses the same stable resource IDs as
-`/v1/limits`; `spend` contains period totals plus per-account contributions, and `trends` contains the
-ordered daily token points keyed by provider ID. The Markdown form contains the current percentage
-limits, all three spend totals, today's per-provider breakdown, and any refresh errors.
+`/v1/limits`. Provider entries include `account` when a human label such as an email is available and
+`accountId` when the provider supplies a stable identity. `spend` contains period totals plus
+per-account contributions, and `trends` contains the ordered daily token points keyed by provider ID.
+The Markdown form contains account identity, current percentage limits, all three spend totals,
+today's per-provider breakdown, and any refresh errors.
 
 The command and app import the same providers, authentication stores, pricing, refresh coordinator, and
-snapshot cache. A normal read reuses snapshots less than five minutes old and refreshes missing or stale
+snapshot cache. Account metadata comes only from the provider's existing local login or authenticated
+userinfo response; credentials and tokens never enter the output. A normal read reuses snapshots less than five minutes old and refreshes missing or stale
 ones. `--force` is the CLI equivalent of the app's manual refresh: it bypasses that freshness gate and
 writes successful results to the same cache. Credentials are used locally and never appear in the output.
 

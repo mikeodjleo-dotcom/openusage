@@ -146,7 +146,7 @@ public struct UsageReader {
         // CLI output is human-read: resolve card titles against the persisted account registry so
         // renames show, matching the app's UI and HTTP API. Injected-provider tests use their own
         // defaults suite, so this is a no-op there.
-        let accountTitles = ProviderAccountsStore(defaults: defaults).resolvedDisplayNamesByCardID
+        let accountStore = ProviderAccountsStore(defaults: defaults)
         let state = LocalUsageAPI.State(
             enabledOrderedIDs: enabledOrderedIDs,
             knownIDs: knownIDs,
@@ -154,7 +154,8 @@ public struct UsageReader {
             limitDescriptors: registry.limitDescriptorsByProvider,
             errors: errors
         )
-        .resolvingDisplayNames(accountTitles)
+        .resolvingDisplayNames(accountStore.resolvedDisplayNamesByCardID)
+        .resolvingAccounts(accountStore.accountIdentitiesByCardID)
         let outputIDs = requestedToken.map { state.matchingCardIDs(for: $0) } ?? enabledOrderedIDs
         let data: Data
         switch format {

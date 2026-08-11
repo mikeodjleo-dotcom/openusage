@@ -1,9 +1,15 @@
 import Foundation
 
+struct KimiMappedUsage: Sendable {
+    var plan: String?
+    var lines: [MetricLine]
+    var account: ProviderAccountIdentity?
+}
+
 enum KimiUsageMapper {
     static let weeklyPeriodMs = 7 * 24 * 60 * 60 * 1000
 
-    static func map(_ body: Data) throws -> (plan: String?, lines: [MetricLine]) {
+    static func map(_ body: Data) throws -> KimiMappedUsage {
         guard let root = ProviderParse.jsonObject(body),
               let usage = root["usage"] as? [String: Any] else {
             throw KimiUsageError.invalidResponse
@@ -20,8 +26,16 @@ enum KimiUsageMapper {
         }
         lines.append(try percentLine(usage, label: "Weekly", periodMs: weeklyPeriodMs))
 
-        let level = (((root["user"] as? [String: Any])?["membership"] as? [String: Any])?["level"] as? String)
-        return (planName(level), lines)
+        let user = root["user"] as? [String: Any]
+        let level = ((user?["membership"] as? [String: Any])?["level"] as? String)
+        let account = user.flatMap {
+            ProviderAccountIdentity.from(
+                $0,
+                labelKeys: ["email", "username", "nickname", "name"],
+                idKeys: ["userId", "user_id", "id"]
+            )
+        }
+        return KimiMappedUsage(plan: planName(level), lines: lines, account: account)
     }
 
     private static func percentLine(_ detail: [String: Any], label: String, periodMs: Int) throws -> MetricLine {

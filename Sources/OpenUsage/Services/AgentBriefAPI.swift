@@ -32,8 +32,8 @@ enum AgentBriefAPI {
             "",
             "## Limits",
             "",
-            "| Provider | Resource | Remaining | Resets at |",
-            "| --- | --- | ---: | --- |"
+            "| Provider | Account | Resource | Remaining | Resets at |",
+            "| --- | --- | --- | ---: | --- |"
         ]
 
         var limitCount = 0
@@ -44,10 +44,11 @@ enum AgentBriefAPI {
                       limit > 0 else { continue }
                 limitCount += 1
                 let remaining = max(0, min(100, ((limit - used) / limit) * 100))
-                lines.append("| \(escape(snapshot.displayName)) | \(escape(label)) | \(percent(remaining)) | \(resetsAt.map(OpenUsageISO8601.string(from:)) ?? "-") |")
+                let account = snapshot.account?.label ?? snapshot.account?.id ?? "-"
+                lines.append("| \(escape(snapshot.displayName)) | \(escape(account)) | \(escape(label)) | \(percent(remaining)) | \(resetsAt.map(OpenUsageISO8601.string(from:)) ?? "-") |")
             }
         }
-        if limitCount == 0 { lines.append("| No current limit data | - | - | - |") }
+        if limitCount == 0 { lines.append("| No current limit data | - | - | - | - |") }
 
         lines += ["", "## Spend", "", "| Period | Cost | Tokens |", "| --- | ---: | ---: |"]
         for period in periods {

@@ -36,7 +36,7 @@ final class KimiProviderTests: XCTestCase {
     func testMapsWeeklyAndFiveHourQuota() throws {
         let json = #"""
         {
-          "user": {"membership": {"level": "LEVEL_ADVANCED"}},
+          "user": {"userId": "kimi-user-1", "membership": {"level": "LEVEL_ADVANCED"}},
           "usage": {
             "limit": "100", "used": "23", "remaining": "77",
             "resetTime": "2026-08-13T09:47:14.880960Z"
@@ -54,6 +54,8 @@ final class KimiProviderTests: XCTestCase {
         let mapped = try KimiUsageMapper.map(Data(json.utf8))
 
         XCTAssertEqual(mapped.plan, "Advanced")
+        XCTAssertEqual(mapped.account?.id, "kimi-user-1")
+        XCTAssertNil(mapped.account?.label)
         XCTAssertEqual(mapped.lines.count, 2)
         guard case .progress(let sessionLabel, let sessionUsed, let sessionLimit, _, _, let sessionPeriod, _) = mapped.lines[0],
               case .progress(let weeklyLabel, let weeklyUsed, let weeklyLimit, _, _, let weeklyPeriod, _) = mapped.lines[1]

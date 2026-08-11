@@ -183,6 +183,7 @@ final class AppContainer {
             // API output is human-read too: resolve card titles at respond time so renames show,
             // exactly like every UI surface.
             .resolvingDisplayNames(accounts.resolvedDisplayNamesByCardID)
+            .resolvingAccounts(accounts.accountIdentitiesByCardID)
         })
         self.refreshTask = Self.startPeriodicRefresh(dataStore: dataStore, telemetry: telemetry)
         localAPI.start()

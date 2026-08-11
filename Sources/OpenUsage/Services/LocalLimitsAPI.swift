@@ -53,6 +53,8 @@ enum LocalLimitsAPI {
 
     private struct WireProvider: Encodable {
         let displayName: String
+        let account: String?
+        let accountID: String?
         let plan: String?
         let fetchedAt: String
         let expiresAt: String
@@ -61,6 +63,8 @@ enum LocalLimitsAPI {
 
         init(snapshot: ProviderSnapshot, descriptors: [WidgetDescriptor], generatedAt: Date) {
             displayName = snapshot.displayName
+            account = snapshot.account?.label
+            accountID = snapshot.account?.id
             plan = snapshot.plan
             fetchedAt = OpenUsageISO8601.string(from: snapshot.refreshedAt)
             let expiry = snapshot.refreshedAt.addingTimeInterval(RefreshSetting.interval)
@@ -77,6 +81,11 @@ enum LocalLimitsAPI {
                 }
             }
             self.resources = resources
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case displayName, account, plan, fetchedAt, expiresAt, stale, resources
+            case accountID = "accountId"
         }
     }
 

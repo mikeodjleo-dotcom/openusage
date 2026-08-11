@@ -67,7 +67,14 @@ final class AntigravityProvider: ProviderRuntime {
     func refresh() async -> ProviderSnapshot {
         do {
             let result = try await probe()
-            return ProviderSnapshot.make(provider: provider, plan: result.plan, lines: result.lines, refreshedAt: now())
+            let account = await resolveAccountIdentity()
+            return ProviderSnapshot.make(
+                provider: provider,
+                account: account,
+                plan: result.plan,
+                lines: result.lines,
+                refreshedAt: now()
+            )
         } catch {
             return ProviderSnapshot.error(provider: provider, error: error)
         }
@@ -303,5 +310,67 @@ final class AntigravityProvider: ProviderRuntime {
             return AntigravityUsageMapper.parseLoadCodeAssistPlan(data)
         }
         return nil
+    }
+
+    /// Account lookup is enrichment: quota remains successful when Google userinfo is unavailable.
+    /// Existing usable/cached access tokens go first; OAuth refresh happens only after an auth
+    /// rejection or when no access token exists, matching the quota probe's anti-refresh-storm rule.
+    private func resolveAccountIdentity() async -> ProviderAccountIdentity? {
+        let authStore = self.authStore
+        let source: AntigravityKeychainToken
+        do {
+            guard let loaded = try await loadOffMainActor({ try authStore.loadKeychainToken() }) else {
+                return nil
+            }
+            source = loaded
+        } catch {
+            AppLog.warn(LogTag.auth("antigravity"), "account identity unavailable: keychain read failed")
+            return nil
+        }
+
+        var tokens: [String] = []
+        if let access = source.accessToken, authStore.isUsable(expiry: source.expiry) {
+            tokens.append(access)
+        }
+        if let cached = await loadOffMainActor({ authStore.loadCachedToken(matching: source) }),
+           !tokens.contains(cached) {
+            tokens.append(cached)
+        }
+
+        var sawAuthFailure = false
+        for token in tokens {
+            switch await usageClient.googleUserInfo(token: token) {
+            case .ok(let data):
+                guard let identity = ProviderAccountIdentity.openIDUserInfo(data) else {
+                    AppLog.warn(LogTag.auth("antigravity"), "Google userinfo carried no account identity")
+                    return nil
+                }
+                return identity
+            case .authFailed:
+                sawAuthFailure = true
+            case .unavailable:
+                continue
+            }
+        }
+
+        guard (sawAuthFailure || tokens.isEmpty), let refreshToken = source.refreshToken else {
+            if !tokens.isEmpty {
+                AppLog.warn(LogTag.auth("antigravity"), "Google userinfo unavailable; account metadata omitted")
+            }
+            return nil
+        }
+        guard case .refreshed(let accessToken, let expiresIn) = await usageClient.refreshGoogleToken(refreshToken) else {
+            AppLog.warn(LogTag.auth("antigravity"), "Google token refresh failed during account lookup")
+            return nil
+        }
+        await loadOffMainActor {
+            authStore.cacheToken(accessToken, expiresIn: expiresIn, sourceRefreshToken: refreshToken)
+        }
+        guard case .ok(let data) = await usageClient.googleUserInfo(token: accessToken),
+              let identity = ProviderAccountIdentity.openIDUserInfo(data) else {
+            AppLog.warn(LogTag.auth("antigravity"), "Google userinfo unavailable after token refresh")
+            return nil
+        }
+        return identity
     }
 }
