@@ -39,6 +39,43 @@ final class ProviderAccountAssemblyTests: XCTestCase {
         XCTAssertNil(store.defaultBadgeHolder(family: "codex"))
     }
 
+    func testDefaultCodexCardShowsItsAccountLabelWithoutChangingClaudeDefault() {
+        let source = ProviderAccountSource(
+            kind: .defaultHome,
+            anchor: "/Users/dev/.codex",
+            holdsDefaultSource: true
+        )
+        let codex = ProviderAccountRecord(
+            id: "codex",
+            family: "codex",
+            identityKey: "codex-acct-1",
+            label: "mike@example.com",
+            sources: [source]
+        )
+        let claude = ProviderAccountRecord(
+            id: "claude",
+            family: "claude",
+            identityKey: "claude-acct-1",
+            label: "mike@example.com",
+            sources: [source]
+        )
+
+        XCTAssertEqual(codex.derivedDisplayName, "Codex — mike@example.com")
+        XCTAssertEqual(claude.derivedDisplayName, "Claude")
+    }
+
+    func testDefaultCodexCardWithoutAnAccountLabelKeepsItsStockName() {
+        let codex = ProviderAccountRecord(
+            id: "codex",
+            family: "codex",
+            identityKey: "codex-acct-1",
+            label: nil,
+            sources: []
+        )
+
+        XCTAssertEqual(codex.derivedDisplayName, "Codex")
+    }
+
     /// A family whose home facts aren't readable this launch (first Finder/Dock launch racing a
     /// slow shell) is left out of the pass entirely: not observed, not reconciled — while a family
     /// whose home override is already in the process environment still resolves.

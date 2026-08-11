@@ -1,5 +1,15 @@
 # Changelog
 
+## aix-v0.7.6-aix.5
+
+### Bug Fixes
+- Show the account email on the default Codex card so multiple Codex accounts remain distinguishable.
+
+---
+
+### Changelog
+**Full Changelog**: [aix-v0.7.6-aix.4...aix-v0.7.6-aix.5](https://github.com/mikeodjleo-dotcom/openusage/compare/aix-v0.7.6-aix.4...aix-v0.7.6-aix.5)
+
 ## v0.7.7-beta.1
 
 ### Bug Fixes
