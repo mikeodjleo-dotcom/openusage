@@ -21,9 +21,15 @@ struct OpenUsageCLI {
             guard let defaults = UserDefaults(suiteName: app.bundleIdentifier) else {
                 throw CLIError.appDefaultsUnavailable
             }
+            let format: UsageReadFormat = switch arguments.briefOutput {
+            case .json: .briefJSON
+            case .markdown: .briefMarkdown
+            case nil: .limitsJSON
+            }
             let result = try await UsageReader(userDefaults: defaults).read(
                 providerID: arguments.providerID,
-                force: arguments.force
+                force: arguments.force,
+                format: format
             )
             FileHandle.standardOutput.write(result.data)
             FileHandle.standardOutput.write(Data("\n".utf8))
@@ -52,12 +58,17 @@ struct OpenUsageCLI {
     }
 
     private static let help = """
-    Usage: openusage [provider] [--force]
+    Usage:
+      openusage [provider] [--force]
+      openusage brief [--json | --markdown] [--force]
 
-    Read limits through OpenUsage's shared five-minute cache and exit. Output is always JSON.
+    Read through OpenUsage's shared five-minute cache and exit. The brief command combines limits,
+    spend, and usage trends for agents; it defaults to JSON.
 
     Options:
       --force      Refresh even when the shared cache is still fresh
+      --json       Print the agent brief as structured JSON
+      --markdown   Print the agent brief as compact Markdown
       -v, --version
       -h, --help
     """

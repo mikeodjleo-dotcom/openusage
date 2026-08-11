@@ -5,6 +5,12 @@ public struct UsageReadResult: Sendable {
     public let warnings: [String]
 }
 
+public enum UsageReadFormat: Sendable {
+    case limitsJSON
+    case briefJSON
+    case briefMarkdown
+}
+
 public enum UsageReaderError: LocalizedError, Sendable {
     case unknownProvider(String)
     case refreshFailed(String)
@@ -36,7 +42,11 @@ public struct UsageReader {
         self.providersOverride = providers
     }
 
-    public func read(providerID requestedProviderID: String? = nil, force: Bool = false) async throws -> UsageReadResult {
+    public func read(
+        providerID requestedProviderID: String? = nil,
+        force: Bool = false,
+        format: UsageReadFormat = .limitsJSON
+    ) async throws -> UsageReadResult {
         // The launch account pass (see `ProviderAccountAssembly`): resolves each family's default
         // account so cached snapshots are guarded — and refreshed ones stamped — with the correct
         // account, and finds the extra Claude cards the catalog must build (the CLI must know the
@@ -145,12 +155,22 @@ public struct UsageReader {
             errors: errors
         )
         .resolvingDisplayNames(accountTitles)
-        let path = requestedToken.map { "/v1/limits/\($0)" } ?? "/v1/limits"
-        let response = LocalUsageAPI.respond(method: "GET", path: path, state: state)
-        guard let data = response.body else {
-            // Unreachable in practice: the token was validated above and the limits routes always
-            // produce a body for a known token. Fail loudly rather than print nothing.
-            throw UsageReaderError.refreshFailed(warnings.first ?? "local read produced no data")
+        let outputIDs = requestedToken.map { state.matchingCardIDs(for: $0) } ?? enabledOrderedIDs
+        let data: Data
+        switch format {
+        case .limitsJSON:
+            let path = requestedToken.map { "/v1/limits/\($0)" } ?? "/v1/limits"
+            let response = LocalUsageAPI.respond(method: "GET", path: path, state: state)
+            guard let body = response.body else {
+                // Unreachable in practice: the token was validated above and the limits routes always
+                // produce a body for a known token. Fail loudly rather than print nothing.
+                throw UsageReaderError.refreshFailed(warnings.first ?? "local read produced no data")
+            }
+            data = body
+        case .briefJSON:
+            data = try AgentBriefAPI.json(providerIDs: outputIDs, state: state)
+        case .briefMarkdown:
+            data = AgentBriefAPI.markdown(providerIDs: outputIDs, state: state)
         }
         return UsageReadResult(data: data, warnings: warnings)
     }
