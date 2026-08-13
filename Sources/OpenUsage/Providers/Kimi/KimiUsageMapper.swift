@@ -82,7 +82,16 @@ enum KimiUsageMapper {
 
     private static func planName(_ level: String?) -> String? {
         guard let level else { return nil }
+        if let displayName = officialPlanNames[level] {
+            return displayName
+        }
         let raw = level.replacingOccurrences(of: "LEVEL_", with: "")
         return raw.lowercased().capitalized
     }
+
+    /// Kimi Code's usage API identifies subscriptions by level rather than display name. Keep the
+    /// names Kimi shows in its membership UI here; unknown levels retain the prior readable fallback.
+    private static let officialPlanNames = [
+        "LEVEL_ADVANCED": "Allegro"
+    ]
 }

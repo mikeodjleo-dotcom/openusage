@@ -53,7 +53,7 @@ final class KimiProviderTests: XCTestCase {
 
         let mapped = try KimiUsageMapper.map(Data(json.utf8))
 
-        XCTAssertEqual(mapped.plan, "Advanced")
+        XCTAssertEqual(mapped.plan, "Allegro")
         XCTAssertEqual(mapped.account?.id, "kimi-user-1")
         XCTAssertNil(mapped.account?.label)
         XCTAssertEqual(mapped.lines.count, 2)
@@ -74,5 +74,18 @@ final class KimiProviderTests: XCTestCase {
 
     func testRejectsMalformedQuota() {
         XCTAssertThrowsError(try KimiUsageMapper.map(Data(#"{"usage":{}}"#.utf8)))
+    }
+
+    func testPreservesReadableFallbackForUnknownMembershipLevel() throws {
+        let json = #"""
+        {
+          "user": {"membership": {"level": "LEVEL_FUTURE"}},
+          "usage": {"limit": "100", "used": "0"}
+        }
+        """#
+
+        let mapped = try KimiUsageMapper.map(Data(json.utf8))
+
+        XCTAssertEqual(mapped.plan, "Future")
     }
 }

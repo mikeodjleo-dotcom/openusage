@@ -4,6 +4,8 @@ OpenUsage tracks Kimi Code's rolling session and weekly quota in the dashboard a
 
 - Credentials come from the official Kimi Code CLI under `~/.kimi-code` (or `KIMI_CODE_HOME`).
 - A configured Kimi Code API key is preferred; a fresh CLI OAuth credential is the fallback.
+- The plan label uses Kimi's official name for the usage API membership level (for example,
+  `LEVEL_ADVANCED` appears as **Allegro**).
 - OpenUsage calls `GET https://api.kimi.com/coding/v1/usages` and never stores the credential.
 - The provider is detected and enabled automatically when a usable local credential exists.
 
