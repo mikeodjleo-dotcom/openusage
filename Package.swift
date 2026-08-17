@@ -58,6 +58,9 @@ let package = Package(
             name: "OpenUsageTests",
             dependencies: ["OpenUsage"],
             path: "Tests/OpenUsageTests",
+            resources: [
+                .copy("Fixtures")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]

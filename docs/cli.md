@@ -26,6 +26,8 @@ The JSON schema is `openusage.brief.v1`. Its `providers` object uses the same st
 `/v1/limits`. Provider entries include `account` when a human label such as an email is available and
 `accountId` when the provider supplies a stable identity. `spend` contains period totals plus
 per-account contributions, and `trends` contains the ordered daily token points keyed by provider ID.
+Providers that monitor multiple credential channels also include an `entries` array. Each entry carries
+its account label, `isPrimary`, availability, plan/identity when returned, and independent resources.
 The Markdown form contains account identity, current percentage limits, all three spend totals,
 today's per-provider breakdown, and any refresh errors.
 

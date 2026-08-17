@@ -7,7 +7,8 @@ struct KimiMappedUsage: Sendable {
 }
 
 enum KimiUsageMapper {
-    static let weeklyPeriodMs = 7 * 24 * 60 * 60 * 1000
+    static let fiveHourPeriodMs = 5 * 60 * 60 * 1000
+    static let sevenDayPeriodMs = 7 * 24 * 60 * 60 * 1000
 
     static func map(_ body: Data) throws -> KimiMappedUsage {
         guard let root = ProviderParse.jsonObject(body),
@@ -16,15 +17,19 @@ enum KimiUsageMapper {
         }
 
         var lines: [MetricLine] = []
-        if let limits = root["limits"] as? [[String: Any]], let first = limits.first {
-            guard let detail = first["detail"] as? [String: Any],
-                  let window = first["window"] as? [String: Any],
-                  let periodMs = periodDurationMs(window) else {
-                throw KimiUsageError.invalidResponse
+        if let limits = root["limits"] as? [[String: Any]] {
+            for limit in limits {
+                guard let window = limit["window"] as? [String: Any],
+                      let periodMs = periodDurationMs(window) else { continue }
+                guard periodMs == fiveHourPeriodMs else { continue }
+                guard let detail = limit["detail"] as? [String: Any] else {
+                    throw KimiUsageError.invalidResponse
+                }
+                lines.append(try percentLine(detail, label: "5-Hour Code", periodMs: periodMs))
+                break
             }
-            lines.append(try percentLine(detail, label: "Session", periodMs: periodMs))
         }
-        lines.append(try percentLine(usage, label: "Weekly", periodMs: weeklyPeriodMs))
+        lines.append(try percentLine(usage, label: "7-Day Code", periodMs: sevenDayPeriodMs))
 
         let user = root["user"] as? [String: Any]
         let level = ((user?["membership"] as? [String: Any])?["level"] as? String)
@@ -43,10 +48,12 @@ enum KimiUsageMapper {
             throw KimiUsageError.invalidResponse
         }
         let used: Double
-        if let explicit = ProviderParse.number(detail["used"]), explicit >= 0 {
-            used = explicit
-        } else if let remaining = ProviderParse.number(detail["remaining"]), remaining >= 0, remaining <= limit {
+        // Kimi's own quota UI calculates these windows from remaining / limit. The API's `used`
+        // field can be a stale or differently-scoped counter, so it is only a compatibility fallback.
+        if let remaining = ProviderParse.number(detail["remaining"]), remaining >= 0, remaining <= limit {
             used = limit - remaining
+        } else if let explicit = ProviderParse.number(detail["used"]), explicit >= 0 {
+            used = explicit
         } else {
             throw KimiUsageError.invalidResponse
         }
@@ -73,6 +80,7 @@ enum KimiUsageMapper {
         case "TIME_UNIT_MINUTE": multiplier = 60 * 1000
         case "TIME_UNIT_HOUR": multiplier = 60 * 60 * 1000
         case "TIME_UNIT_DAY": multiplier = 24 * 60 * 60 * 1000
+        case "TIME_UNIT_WEEK": multiplier = 7 * 24 * 60 * 60 * 1000
         default: return nil
         }
         let value = duration * multiplier

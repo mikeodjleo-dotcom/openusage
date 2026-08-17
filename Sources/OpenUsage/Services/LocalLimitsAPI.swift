@@ -60,6 +60,7 @@ enum LocalLimitsAPI {
         let expiresAt: String
         let stale: Bool
         let resources: [String: WireResource]
+        let entries: [WireAccountEntry]?
 
         init(snapshot: ProviderSnapshot, descriptors: [WidgetDescriptor], generatedAt: Date) {
             displayName = snapshot.displayName
@@ -81,10 +82,43 @@ enum LocalLimitsAPI {
                 }
             }
             self.resources = resources
+            entries = snapshot.accountEntries?.map(WireAccountEntry.init)
         }
 
         enum CodingKeys: String, CodingKey {
-            case displayName, account, plan, fetchedAt, expiresAt, stale, resources
+            case displayName, account, plan, fetchedAt, expiresAt, stale, resources, entries
+            case accountID = "accountId"
+        }
+    }
+
+    private struct WireAccountEntry: Encodable {
+        let account: String
+        let accountIdentity: String?
+        let accountID: String?
+        let isPrimary: Bool
+        let availability: ProviderAccountAvailability
+        let message: String?
+        let plan: String?
+        let resources: [String: WireResource]
+
+        init(_ entry: ProviderAccountEntry) {
+            account = entry.label
+            accountIdentity = entry.account?.label
+            accountID = entry.account?.id
+            isPrimary = entry.isPrimary
+            availability = entry.availability
+            message = entry.message
+            plan = entry.plan
+            resources = entry.resources.compactMapValues { line in
+                let descriptor = LimitResourceDescriptor(
+                    key: "accountEntry", kind: .consumption, unit: "percent", source: .progress
+                )
+                return WireResource(resource: descriptor, line: line)
+            }
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case account, accountIdentity, isPrimary, availability, message, plan, resources
             case accountID = "accountId"
         }
     }

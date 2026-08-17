@@ -40,6 +40,26 @@ struct ProviderAccountIdentity: Hashable, Sendable, Codable {
     }
 }
 
+enum ProviderAccountAvailability: String, Hashable, Sendable, Codable {
+    case available
+    case missingCredential
+    case expiredCredential
+    case requestFailed
+}
+
+/// One independently queried account inside a provider card. Most providers expose one account and
+/// leave this nil; providers such as Kimi can keep multiple local credential channels visible without
+/// pretending their limits belong to the card's primary account.
+struct ProviderAccountEntry: Hashable, Sendable, Codable {
+    var label: String
+    var isPrimary: Bool
+    var availability: ProviderAccountAvailability
+    var message: String?
+    var account: ProviderAccountIdentity?
+    var plan: String?
+    var resources: [String: MetricLine]
+}
+
 /// Latest normalized output for one provider refresh.
 struct ProviderSnapshot: Hashable, Sendable, Codable {
     let providerID: String
@@ -51,6 +71,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     /// Account metadata returned by the provider. Claude/Codex snapshots are enriched at the local
     /// API boundary from `ProviderAccountsStore`, keeping their cached snapshots rename-free.
     var account: ProviderAccountIdentity?
+    var accountEntries: [ProviderAccountEntry]?
     var plan: String?
     var lines: [MetricLine]
     var refreshedAt: Date
@@ -71,6 +92,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
         providerID: String,
         displayName: String,
         account: ProviderAccountIdentity? = nil,
+        accountEntries: [ProviderAccountEntry]? = nil,
         plan: String? = nil,
         lines: [MetricLine],
         refreshedAt: Date = Date(),
@@ -81,6 +103,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
         self.providerID = providerID
         self.displayName = displayName
         self.account = account
+        self.accountEntries = accountEntries
         self.plan = plan
         self.lines = lines
         self.refreshedAt = refreshedAt
@@ -99,6 +122,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
     static func make(
         provider: Provider,
         account: ProviderAccountIdentity? = nil,
+        accountEntries: [ProviderAccountEntry]? = nil,
         plan: String?,
         lines: [MetricLine],
         refreshedAt: Date,
@@ -109,6 +133,7 @@ struct ProviderSnapshot: Hashable, Sendable, Codable {
             providerID: provider.id,
             displayName: provider.displayName,
             account: account,
+            accountEntries: accountEntries,
             plan: plan,
             lines: lines,
             refreshedAt: refreshedAt,

@@ -26,7 +26,7 @@ enum DefaultLayout {
         "grok.weekly", "grok.trend",
         "grok.payAsYouGo", "grok.today", "grok.yesterday", "grok.last30",
 
-        "kimi.session", "kimi.weekly",
+        "kimi.session", "kimi.weekly", "kimi.key.session", "kimi.key.weekly",
 
         "opencode.session", "opencode.weekly", "opencode.monthly", "opencode.trend",
         "opencode.today", "opencode.yesterday", "opencode.last30",

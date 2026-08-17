@@ -99,6 +99,9 @@ stable provider-owned identifier. Either field is omitted when unavailable, and 
 token, API key, device ID, or credential fingerprint. `expiresAt` is always `fetchedAt` plus the same five-minute freshness interval used by
 the app and CLI; `stale` says whether that instant has passed. Refresh failures appear in `errors` as
 `{"providerId":"…","message":"…"}` while a last-good provider snapshot remains available.
+Multi-channel providers include `entries`; each entry has its account label, `isPrimary`, availability,
+optional plan/identity, and an independent `resources` object. Missing or expired credentials remain in
+the array with an explicit availability and message.
 For bounded progress resources, `unit` follows the provider's live metric format. For example, Cursor
 `totalUsage` is `percent` on percentage-based plans, `requests` on request-based Enterprise plans, and
 `usd` when Cursor reports a dollar pool.
@@ -114,6 +117,7 @@ For bounded progress resources, `unit` follows the provider's live metric format
 | Copilot | `premiumCredits`, `extraUsage`, `orgCredits`, `orgSpend`, `chat`, `completions` |
 | Devin | `daily`, `weekly`, `extraUsageBalance` |
 | Grok | `weekly` |
+| Kimi | top-level `officialSession`, `officialWeekly`, `keySession`, `keyWeekly`; per-entry `session`, `weekly` |
 | OpenCode | `session`, `weekly`, `monthly` |
 | OpenRouter | `credits`, `balance`, `keyLimit` |
 | Z.ai | `session`, `weekly`, `webSearches` |

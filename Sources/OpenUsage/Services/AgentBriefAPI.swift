@@ -38,14 +38,30 @@ enum AgentBriefAPI {
 
         var limitCount = 0
         for snapshot in snapshots {
+            if let entries = snapshot.accountEntries {
+                for entry in entries {
+                    if entry.availability != .available {
+                        limitCount += 1
+                        let primary = entry.isPrimary ? " (主)" : ""
+                        lines.append("| \(escape(snapshot.displayName)) | \(escape(entry.label + primary)) | 不可用 | \(escape(entry.message ?? entry.availability.rawValue)) | - |")
+                        continue
+                    }
+                    for line in entry.resources.values.sorted(by: { $0.label < $1.label }) {
+                        appendLimitRow(
+                            line, provider: snapshot.displayName,
+                            account: entry.label + (entry.isPrimary ? " (主)" : ""),
+                            lines: &lines, count: &limitCount
+                        )
+                    }
+                }
+                continue
+            }
             for line in snapshot.lines {
-                guard case .progress(let label, let used, let limit, let format, let resetsAt, _, _) = line,
-                      format == .percent,
-                      limit > 0 else { continue }
-                limitCount += 1
-                let remaining = max(0, min(100, ((limit - used) / limit) * 100))
-                let account = snapshot.account?.label ?? snapshot.account?.id ?? "-"
-                lines.append("| \(escape(snapshot.displayName)) | \(escape(account)) | \(escape(label)) | \(percent(remaining)) | \(resetsAt.map(OpenUsageISO8601.string(from:)) ?? "-") |")
+                appendLimitRow(
+                    line, provider: snapshot.displayName,
+                    account: snapshot.account?.label ?? snapshot.account?.id ?? "-",
+                    lines: &lines, count: &limitCount
+                )
             }
         }
         if limitCount == 0 { lines.append("| No current limit data | - | - | - | - |") }
@@ -75,6 +91,21 @@ enum AgentBriefAPI {
         }
 
         return Data((lines.joined(separator: "\n") + "\n").utf8)
+    }
+
+    private static func appendLimitRow(
+        _ line: MetricLine,
+        provider: String,
+        account: String,
+        lines: inout [String],
+        count: inout Int
+    ) {
+        guard case .progress(let label, let used, let limit, let format, let resetsAt, _, _) = line,
+              format == .percent,
+              limit > 0 else { return }
+        count += 1
+        let remaining = max(0, min(100, ((limit - used) / limit) * 100))
+        lines.append("| \(escape(provider)) | \(escape(account)) | \(escape(label)) | \(percent(remaining)) | \(resetsAt.map(OpenUsageISO8601.string(from:)) ?? "-") |")
     }
 
     private static let periods = [

@@ -10,6 +10,25 @@ struct KimiAuth: Hashable, Sendable {
     var source: Source
 }
 
+enum KimiAccountKind: String, CaseIterable, Hashable, Sendable {
+    case officialSubscription
+    case sharedAPIKey
+
+    var label: String {
+        switch self {
+        case .officialSubscription: "Kimi 官方订阅"
+        case .sharedAPIKey: "Kimi 拼车key"
+        }
+    }
+}
+
+struct KimiAccountCredential: Sendable, Equatable {
+    var kind: KimiAccountKind
+    var isPrimary: Bool
+    var availability: ProviderAccountAvailability
+    var auth: KimiAuth?
+}
+
 enum KimiAuthError: Error, LocalizedError, Equatable {
     case notLoggedIn
     case invalidCredential
@@ -24,9 +43,9 @@ enum KimiAuthError: Error, LocalizedError, Equatable {
     }
 }
 
-/// Reuses the official Kimi Code CLI's local configuration. A static Kimi Code API key is preferred;
-/// if none exists, a still-live OAuth credential from the CLI is accepted. OpenUsage never copies or
-/// persists either secret.
+/// Reuses the official Kimi Code CLI's local configuration. A still-live OAuth credential is preferred
+/// because it identifies the same account as the CLI; a static Kimi API key is only a fallback.
+/// OpenUsage never copies or persists either secret.
 struct KimiAuthStore: Sendable {
     static let defaultHome = "~/.kimi-code"
     static let homeEnvironmentName = "KIMI_CODE_HOME"
@@ -46,19 +65,42 @@ struct KimiAuthStore: Sendable {
     }
 
     func loadAuth() -> KimiAuth? {
-        if let text = try? files.readText(configPath()),
-           let key = Self.staticAPIKey(from: text) {
-            return KimiAuth(token: key, source: .apiKey)
-        }
+        let accounts = loadAccounts()
+        return accounts.first(where: { $0.isPrimary })?.auth ?? accounts.compactMap(\.auth).first
+    }
 
-        guard let text = try? files.readText(credentialPath()),
-              let credential = Self.oauthCredential(from: text),
-              credential.expiresAt.timeIntervalSince(now()) > 60 else {
-            return nil
-        }
+    func loadAccounts() -> [KimiAccountCredential] {
+        let configText = (try? files.readText(configPath())) ?? ""
+        let config = Self.configuration(from: configText)
         let deviceID = (try? files.readText(deviceIDPath()))?
             .trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
-        return KimiAuth(token: credential.accessToken, source: .cliOAuth(deviceID: deviceID))
+
+        let oauth: KimiAccountCredential
+        if let text = try? files.readText(credentialPath()),
+           let credential = Self.oauthCredential(from: text) {
+            let isLive = credential.expiresAt.timeIntervalSince(now()) > 60
+            oauth = KimiAccountCredential(
+                kind: .officialSubscription,
+                isPrimary: config.activeProvider == config.managedProvider,
+                availability: isLive ? .available : .expiredCredential,
+                auth: isLive ? KimiAuth(token: credential.accessToken, source: .cliOAuth(deviceID: deviceID)) : nil
+            )
+        } else {
+            oauth = KimiAccountCredential(
+                kind: .officialSubscription,
+                isPrimary: config.activeProvider == config.managedProvider,
+                availability: .missingCredential,
+                auth: nil
+            )
+        }
+
+        let key = KimiAccountCredential(
+            kind: .sharedAPIKey,
+            isPrimary: config.activeProvider == config.staticProvider,
+            availability: config.staticAPIKey == nil ? .missingCredential : .available,
+            auth: config.staticAPIKey.map { KimiAuth(token: $0, source: .apiKey) }
+        )
+        return [oauth, key]
     }
 
     func configPath() -> String { homePath() + "/config.toml" }
@@ -73,6 +115,17 @@ struct KimiAuthStore: Sendable {
     /// Reads API keys only from `[providers.*]` sections whose declared type is `kimi`. OAuth-managed
     /// sections are skipped so their placeholder/fallback `api_key` cannot outrank the credential file.
     static func staticAPIKey(from toml: String) -> String? {
+        configuration(from: toml).staticAPIKey
+    }
+
+    private struct Configuration {
+        var activeProvider: String?
+        var managedProvider: String?
+        var staticProvider: String?
+        var staticAPIKey: String?
+    }
+
+    private static func configuration(from toml: String) -> Configuration {
         var section: [String: String] = [:]
         var sections: [[String: String]] = []
 
@@ -95,12 +148,40 @@ struct KimiAuthStore: Sendable {
         }
         flush()
 
-        return sections.first { candidate in
+        let root = sections.first(where: { $0["__name"] == nil }) ?? [:]
+        let defaultModel = root["default_model"]
+        let modelSection = defaultModel.flatMap { model in
+            sections.first { normalizedSectionName($0["__name"]) == "models.\(model)" }
+        }
+        let activeProvider = modelSection?["provider"]
+        let managedProvider = sections.first { candidate in
+            guard let name = normalizedSectionName(candidate["__name"]),
+                  name.hasPrefix("providers."), name.hasSuffix(".oauth") else { return false }
+            return true
+        }.flatMap { candidate in
+            normalizedSectionName(candidate["__name"])
+                .map { String($0.dropFirst("providers.".count).dropLast(".oauth".count)) }
+        }
+        let staticSection = sections.first { candidate in
             guard candidate["__name"]?.hasPrefix("providers.") == true,
                   candidate["type"] == "kimi",
                   candidate["oauth"] == nil else { return false }
-            return candidate["api_key"]?.nilIfEmpty != nil
-        }?["api_key"]
+            let name = normalizedSectionName(candidate["__name"])
+                .map { String($0.dropFirst("providers.".count)) }
+            return candidate["api_key"]?.nilIfEmpty != nil && name != managedProvider
+        }
+        let staticProvider = staticSection.flatMap { normalizedSectionName($0["__name"]) }
+            .map { String($0.dropFirst("providers.".count)) }
+        return Configuration(
+            activeProvider: activeProvider,
+            managedProvider: managedProvider,
+            staticProvider: staticProvider,
+            staticAPIKey: staticSection?["api_key"]?.nilIfEmpty
+        )
+    }
+
+    private static func normalizedSectionName(_ name: String?) -> String? {
+        name?.replacingOccurrences(of: "\"", with: "")
     }
 
     private static func quotedString(_ text: String) -> String? {
