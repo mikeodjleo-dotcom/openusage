@@ -126,6 +126,118 @@ final class KimiProviderTests: XCTestCase {
     }
 
     @MainActor
+    func testExpiredOAuthRefreshesPersistsRotatedTokensAndFetchesUsage() async throws {
+        let credentialPath = "~/.kimi-code/credentials/kimi-code.json"
+        let files = FakeFiles([
+            "~/.kimi-code/config.toml": managedConfig(),
+            credentialPath: #"{"access_token":"old-access","refresh_token":"old+refresh/token","expires_at":900,"expires_in":900,"scope":"old-scope","token_type":"Bearer","future_field":{"kept":true}}"#,
+            "~/.kimi-code/device_id": "device-1\n"
+        ])
+        let fixture = try realUsageFixture()
+        let http = RoutingHTTPClient { request in
+            if request.url == KimiUsageClient.refreshURL {
+                return HTTPResponse(
+                    statusCode: 200,
+                    headers: [:],
+                    body: Data(#"{"access_token":"new-access","refresh_token":"new-refresh","expires_in":900,"scope":"new-scope","token_type":"Bearer"}"#.utf8)
+                )
+            }
+            return HTTPResponse(statusCode: 200, headers: [:], body: fixture)
+        }
+        let now = Date(timeIntervalSince1970: 1000)
+        let provider = KimiProvider(
+            authStore: KimiAuthStore(files: files, environment: FakeEnvironment(), now: { now }),
+            usageClient: KimiUsageClient(http: http),
+            now: { now }
+        )
+
+        let snapshot = await provider.refresh()
+
+        let official = try XCTUnwrap(snapshot.accountEntries?.first)
+        XCTAssertEqual(official.availability, .available)
+        XCTAssertNotNil(official.resources["session"])
+        XCTAssertNotNil(official.resources["weekly"])
+        XCTAssertEqual(http.requests.count, 2)
+        let refreshRequest = http.requests[0]
+        XCTAssertEqual(refreshRequest.method, "POST")
+        XCTAssertEqual(refreshRequest.url, KimiUsageClient.refreshURL)
+        XCTAssertEqual(refreshRequest.headers["Content-Type"], "application/x-www-form-urlencoded")
+        XCTAssertEqual(
+            String(data: try XCTUnwrap(refreshRequest.body), encoding: .utf8),
+            "client_id=17e5f671-d194-4dfb-9706-5516cb48c098&grant_type=refresh_token&refresh_token=old%2Brefresh%2Ftoken"
+        )
+        XCTAssertEqual(http.requests[1].headers["Authorization"], "Bearer new-access")
+        XCTAssertEqual(http.requests[1].headers["X-Msh-Device-Id"], "device-1")
+
+        let persistedData = try XCTUnwrap(files.files[credentialPath]?.data(using: .utf8))
+        let persisted = try XCTUnwrap(JSONSerialization.jsonObject(with: persistedData) as? [String: Any])
+        XCTAssertEqual(persisted["access_token"] as? String, "new-access")
+        XCTAssertEqual(persisted["refresh_token"] as? String, "new-refresh")
+        XCTAssertEqual(persisted["expires_at"] as? Int, 1900)
+        XCTAssertEqual(persisted["expires_in"] as? Int, 900)
+        XCTAssertEqual(persisted["scope"] as? String, "new-scope")
+        XCTAssertEqual((persisted["future_field"] as? [String: Any])?["kept"] as? Bool, true)
+    }
+
+    @MainActor
+    func testInvalidRefreshTokenIsTheOnlyRefreshFailureThatRequestsRelogin() async throws {
+        let credentialPath = "~/.kimi-code/credentials/kimi-code.json"
+        let original = #"{"access_token":"expired","refresh_token":"invalid-refresh","expires_at":900,"extra":"kept"}"#
+        let files = FakeFiles([
+            "~/.kimi-code/config.toml": managedConfig(),
+            credentialPath: original
+        ])
+        let http = RoutingHTTPClient { _ in
+            HTTPResponse(
+                statusCode: 400,
+                headers: [:],
+                body: Data(#"{"error":"invalid_grant"}"#.utf8)
+            )
+        }
+        let provider = KimiProvider(
+            authStore: KimiAuthStore(
+                files: files,
+                environment: FakeEnvironment(),
+                now: { Date(timeIntervalSince1970: 1000) }
+            ),
+            usageClient: KimiUsageClient(http: http)
+        )
+
+        let snapshot = await provider.refresh()
+
+        let official = try XCTUnwrap(snapshot.accountEntries?.first)
+        XCTAssertEqual(official.availability, .expiredCredential)
+        XCTAssertEqual(official.message, "凭据已过期，请重新登录")
+        XCTAssertEqual(files.files[credentialPath], original)
+        XCTAssertEqual(http.requests.count, 1)
+    }
+
+    @MainActor
+    func testRefreshServiceFailureDoesNotRequestRelogin() async throws {
+        let files = FakeFiles([
+            "~/.kimi-code/config.toml": managedConfig(),
+            "~/.kimi-code/credentials/kimi-code.json": #"{"access_token":"expired","refresh_token":"still-valid","expires_at":900}"#
+        ])
+        let http = RoutingHTTPClient { _ in
+            HTTPResponse(statusCode: 503, headers: [:], body: Data())
+        }
+        let provider = KimiProvider(
+            authStore: KimiAuthStore(
+                files: files,
+                environment: FakeEnvironment(),
+                now: { Date(timeIntervalSince1970: 1000) }
+            ),
+            usageClient: KimiUsageClient(http: http)
+        )
+
+        let snapshot = await provider.refresh()
+
+        let official = try XCTUnwrap(snapshot.accountEntries?.first)
+        XCTAssertEqual(official.availability, .requestFailed)
+        XCTAssertNotEqual(official.message, "凭据已过期，请重新登录")
+    }
+
+    @MainActor
     func testRefreshKeepsBothAccountsSeparatedAndPrimaryFirst() async throws {
         let authStore = accountStore(defaultModel: "kimi-code/k3", includeKey: true)
         let fixture = try realUsageFixture()
@@ -307,6 +419,19 @@ final class KimiProviderTests: XCTestCase {
             environment: FakeEnvironment(),
             now: { Date(timeIntervalSince1970: 1000) }
         )
+    }
+
+    private func managedConfig() -> String {
+        #"""
+        default_model = "kimi-code/k3"
+        [providers."managed:kimi-code"]
+        type = "kimi"
+        api_key = "placeholder"
+        [providers."managed:kimi-code".oauth]
+        storage = "file"
+        [models."kimi-code/k3"]
+        provider = "managed:kimi-code"
+        """#
     }
 
     private func progress(_ lines: [MetricLine], label: String) -> (used: Double, resetsAt: Date?)? {

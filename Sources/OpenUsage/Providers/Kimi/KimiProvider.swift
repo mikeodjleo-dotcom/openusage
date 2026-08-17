@@ -39,7 +39,9 @@ final class KimiProvider: ProviderRuntime {
     }
 
     func hasLocalCredentials() async -> Bool {
-        await loadOffMainActor { [authStore] in authStore.loadAccounts().contains { $0.auth != nil } }
+        await loadOffMainActor { [authStore] in
+            authStore.loadAccounts().contains { $0.auth != nil || $0.oauthCredential?.refreshToken != nil }
+        }
     }
 
     func refresh() async -> ProviderSnapshot {
@@ -62,6 +64,11 @@ final class KimiProvider: ProviderRuntime {
     }
 
     private func refreshAccount(_ credential: KimiAccountCredential) async -> ProviderAccountEntry {
+        if credential.kind == .officialSubscription,
+           credential.auth == nil,
+           let oauthCredential = credential.oauthCredential {
+            return await refreshOfficialAccount(credential, oauthCredential: oauthCredential)
+        }
         guard let auth = credential.auth else {
             let message = credential.availability == .expiredCredential ? "凭据已过期，请重新登录" : "未找到凭据"
             return ProviderAccountEntry(
@@ -73,6 +80,10 @@ final class KimiProvider: ProviderRuntime {
         do {
             let response = try await usageClient.fetchUsage(auth: auth)
             if response.statusCode == 401 || response.statusCode == 403 {
+                if credential.kind == .officialSubscription,
+                   let oauthCredential = credential.oauthCredential {
+                    return await refreshOfficialAccount(credential, oauthCredential: oauthCredential)
+                }
                 return failedEntry(credential, availability: .expiredCredential, message: KimiAuthError.invalidCredential.localizedDescription)
             }
             guard (200..<300).contains(response.statusCode) else {
@@ -96,6 +107,79 @@ final class KimiProvider: ProviderRuntime {
         } catch {
             return failedEntry(credential, availability: .requestFailed, message: KimiUsageError.connectionFailed.localizedDescription)
         }
+    }
+
+    private func refreshOfficialAccount(
+        _ credential: KimiAccountCredential,
+        oauthCredential: KimiOAuthCredential
+    ) async -> ProviderAccountEntry {
+        guard let refreshToken = oauthCredential.refreshToken else {
+            return failedEntry(credential, availability: .expiredCredential, message: "凭据已过期，请重新登录")
+        }
+        do {
+            let refreshResponse = try await usageClient.refreshToken(refreshToken)
+            if refreshResponse.statusCode == 401 || refreshResponse.statusCode == 403 ||
+                Self.isInvalidGrant(refreshResponse) {
+                return failedEntry(credential, availability: .expiredCredential, message: "凭据已过期，请重新登录")
+            }
+            guard (200..<300).contains(refreshResponse.statusCode) else {
+                return failedEntry(
+                    credential,
+                    availability: .requestFailed,
+                    message: KimiUsageError.requestFailed(refreshResponse.statusCode).localizedDescription
+                )
+            }
+
+            let refreshed = try KimiUsageClient.refreshedCredential(from: refreshResponse.body, now: now())
+            try authStore.saveRefreshedCredential(refreshed, replacing: oauthCredential)
+            let response = try await usageClient.fetchUsage(auth: KimiAuth(
+                token: refreshed.accessToken,
+                source: .cliOAuth(deviceID: credential.deviceID)
+            ))
+            guard response.statusCode != 401 && response.statusCode != 403 else {
+                return failedEntry(
+                    credential,
+                    availability: .requestFailed,
+                    message: "Kimi Code credential refresh succeeded, but usage access was rejected."
+                )
+            }
+            guard (200..<300).contains(response.statusCode) else {
+                return failedEntry(
+                    credential,
+                    availability: .requestFailed,
+                    message: KimiUsageError.requestFailed(response.statusCode).localizedDescription
+                )
+            }
+            let mapped = try KimiUsageMapper.map(response.body)
+            return availableEntry(credential, mapped: mapped)
+        } catch let error as KimiUsageError {
+            return failedEntry(credential, availability: .requestFailed, message: error.localizedDescription)
+        } catch {
+            AppLog.error(LogTag.auth("kimi"), "failed to refresh or persist Kimi OAuth credentials")
+            return failedEntry(credential, availability: .requestFailed, message: KimiUsageError.connectionFailed.localizedDescription)
+        }
+    }
+
+    private static func isInvalidGrant(_ response: HTTPResponse) -> Bool {
+        guard response.statusCode == 400,
+              let body = ProviderParse.jsonObject(response.body),
+              let code = body["error"] as? String else { return false }
+        return code == "invalid_grant"
+    }
+
+    private func availableEntry(_ credential: KimiAccountCredential, mapped: KimiMappedUsage) -> ProviderAccountEntry {
+        ProviderAccountEntry(
+            label: credential.kind.label, isPrimary: credential.isPrimary, availability: .available,
+            message: nil, account: mapped.account, plan: mapped.plan,
+            resources: Dictionary(uniqueKeysWithValues: mapped.lines.compactMap { line in
+                switch line.label {
+                case "5-Hour Code": ("session", line)
+                case "7-Day Code": ("weekly", line)
+                case "Monthly Total": ("monthly", line)
+                default: nil
+                }
+            })
+        )
     }
 
     private func failedEntry(

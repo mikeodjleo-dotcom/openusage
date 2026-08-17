@@ -27,6 +27,24 @@ struct KimiAccountCredential: Sendable, Equatable {
     var isPrimary: Bool
     var availability: ProviderAccountAvailability
     var auth: KimiAuth?
+    var oauthCredential: KimiOAuthCredential?
+    var deviceID: String?
+}
+
+struct KimiOAuthCredential: Sendable, Equatable {
+    var accessToken: String
+    var refreshToken: String?
+    var expiresAt: Date
+    var originalJSON: String
+}
+
+struct KimiRefreshedOAuthCredential: Sendable, Equatable {
+    var accessToken: String
+    var refreshToken: String
+    var expiresAt: Date
+    var expiresIn: Int
+    var scope: String
+    var tokenType: String
 }
 
 enum KimiAuthError: Error, LocalizedError, Equatable {
@@ -45,7 +63,8 @@ enum KimiAuthError: Error, LocalizedError, Equatable {
 
 /// Reuses the official Kimi Code CLI's local configuration. A still-live OAuth credential is preferred
 /// because it identifies the same account as the CLI; a static Kimi API key is only a fallback.
-/// OpenUsage never copies or persists either secret.
+/// Rotated OAuth credentials are written back to the CLI file immediately because Kimi rotates the
+/// refresh token on every successful grant.
 struct KimiAuthStore: Sendable {
     static let defaultHome = "~/.kimi-code"
     static let homeEnvironmentName = "KIMI_CODE_HOME"
@@ -83,14 +102,18 @@ struct KimiAuthStore: Sendable {
                 kind: .officialSubscription,
                 isPrimary: config.activeProvider == config.managedProvider,
                 availability: isLive ? .available : .expiredCredential,
-                auth: isLive ? KimiAuth(token: credential.accessToken, source: .cliOAuth(deviceID: deviceID)) : nil
+                auth: isLive ? KimiAuth(token: credential.accessToken, source: .cliOAuth(deviceID: deviceID)) : nil,
+                oauthCredential: credential,
+                deviceID: deviceID
             )
         } else {
             oauth = KimiAccountCredential(
                 kind: .officialSubscription,
                 isPrimary: config.activeProvider == config.managedProvider,
                 availability: .missingCredential,
-                auth: nil
+                auth: nil,
+                oauthCredential: nil,
+                deviceID: deviceID
             )
         }
 
@@ -98,9 +121,34 @@ struct KimiAuthStore: Sendable {
             kind: .sharedAPIKey,
             isPrimary: config.activeProvider == config.staticProvider,
             availability: config.staticAPIKey == nil ? .missingCredential : .available,
-            auth: config.staticAPIKey.map { KimiAuth(token: $0, source: .apiKey) }
+            auth: config.staticAPIKey.map { KimiAuth(token: $0, source: .apiKey) },
+            oauthCredential: nil,
+            deviceID: nil
         )
         return [oauth, key]
+    }
+
+    func saveRefreshedCredential(
+        _ refreshed: KimiRefreshedOAuthCredential,
+        replacing credential: KimiOAuthCredential
+    ) throws {
+        guard let data = credential.originalJSON.data(using: .utf8),
+              var object = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        else {
+            throw KimiUsageError.invalidResponse
+        }
+        object["access_token"] = refreshed.accessToken
+        object["refresh_token"] = refreshed.refreshToken
+        object["expires_at"] = Int(refreshed.expiresAt.timeIntervalSince1970)
+        object["expires_in"] = refreshed.expiresIn
+        object["scope"] = refreshed.scope
+        object["token_type"] = refreshed.tokenType
+
+        let updated = try JSONSerialization.data(withJSONObject: object, options: [.prettyPrinted, .sortedKeys])
+        guard let text = String(data: updated, encoding: .utf8) else {
+            throw KimiUsageError.invalidResponse
+        }
+        try files.writeText(credentialPath(), text)
     }
 
     func configPath() -> String { homePath() + "/config.toml" }
@@ -191,18 +239,25 @@ struct KimiAuthStore: Sendable {
 
     private struct OAuthCredential: Decodable {
         var accessToken: String
+        var refreshToken: String?
         var expiresAt: TimeInterval
 
         enum CodingKeys: String, CodingKey {
             case accessToken = "access_token"
+            case refreshToken = "refresh_token"
             case expiresAt = "expires_at"
         }
     }
 
-    private static func oauthCredential(from json: String) -> (accessToken: String, expiresAt: Date)? {
+    private static func oauthCredential(from json: String) -> KimiOAuthCredential? {
         guard let data = json.data(using: .utf8),
               let decoded = try? JSONDecoder().decode(OAuthCredential.self, from: data),
               !decoded.accessToken.isEmpty else { return nil }
-        return (decoded.accessToken, Date(timeIntervalSince1970: decoded.expiresAt))
+        return KimiOAuthCredential(
+            accessToken: decoded.accessToken,
+            refreshToken: decoded.refreshToken?.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty,
+            expiresAt: Date(timeIntervalSince1970: decoded.expiresAt),
+            originalJSON: json
+        )
     }
 }
