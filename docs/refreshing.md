@@ -34,6 +34,8 @@ are debounced until after refresh; the one-shot CLI drains pending writes before
 
 A failed refresh **never wipes your data**: the last good values stay on screen, and a small warning triangle appears next to the provider's name — hover it for the error message (e.g. "Not logged in"). The error clears on the next successful refresh.
 
+A failure that looks like a momentary connection problem (network unreachable, server 5xx, rate limiting) gets one automatic retry a few seconds later, within the same refresh — those blips usually clear in seconds, so this keeps a brief network hiccup from showing a warning for a whole interval. Failures that retrying can't fix (logged out, expired token, unreadable response) fail right away.
+
 The last good normalized history is preserved too, so a temporary provider failure—or a successful
 limit refresh whose local log scan is temporarily unavailable—does not remove this Mac's previous
 contribution from an iCloud-combined spend total.

@@ -58,6 +58,14 @@ final class WidgetDataStore {
     /// would cause. The manual `force` refresh (⌘R) always bypasses it.
     private static let failureRetryBackoff: TimeInterval = 60
     static let defaultSlowProviderRefreshThreshold: TimeInterval = 10
+    /// Delay before the in-pass retry of a transient failure. Injected so tests don't wait.
+    private let transientRetryDelay: TimeInterval
+    static let defaultTransientRetryDelay: TimeInterval = 5
+    /// How many extra fetches a transient failure earns within one pass. One is enough: the whole-batch
+    /// failure bursts this guards against are connectivity flaps that clear within seconds; a provider
+    /// still down after the retry takes the normal failure path (error + backoff) and the next
+    /// scheduled pass probes it again.
+    private static let maxTransientRetries = 1
 
     /// Rendered snapshots consumed by every UI/API surface. Equal to `localSnapshots` when iCloud sync
     /// is off; machine-local history rows are rebuilt from the union while sync is on.
@@ -125,12 +133,14 @@ final class WidgetDataStore {
         now: @escaping () -> Date = Date.init,
         monotonicNow: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         slowProviderRefreshThreshold: TimeInterval = WidgetDataStore.defaultSlowProviderRefreshThreshold,
+        transientRetryDelay: TimeInterval = WidgetDataStore.defaultTransientRetryDelay,
         notificationSettings: (@MainActor () -> NotificationSettingsStore)? = nil,
         postNotification: (@MainActor (String, String, String, String) async -> Bool)? = nil,
         providerIdentityKeys: [String: String] = [:],
         resolveDisplayName: (@MainActor (String) -> String?)? = nil
     ) {
         precondition(slowProviderRefreshThreshold >= 0)
+        precondition(transientRetryDelay >= 0)
         self.registry = registry
         self.providersByID = Dictionary(uniqueKeysWithValues: providers.map { ($0.provider.id, $0) })
         self.cache = cache
@@ -140,6 +150,7 @@ final class WidgetDataStore {
         self.now = now
         self.monotonicNow = monotonicNow
         self.slowProviderRefreshThreshold = slowProviderRefreshThreshold
+        self.transientRetryDelay = transientRetryDelay
         self.notificationSettings = notificationSettings
         self.postNotification = postNotification
             ?? { idPrefix, title, subtitle, body in
@@ -296,14 +307,39 @@ final class WidgetDataStore {
         refreshingProviderIDs.insert(providerID)
         defer { refreshingProviderIDs.remove(providerID) }
         let start = monotonicNow()
-        var snapshot = await ProviderRefreshContext.$isManual.withValue(force) {
-            await provider.refresh()
+        var transientRetries = 0
+        var snapshot: ProviderSnapshot
+        while true {
+            let candidate = await ProviderRefreshContext.$isManual.withValue(force) {
+                await provider.refresh()
+            }
+            // A canceled refresh may still return if a provider's underlying work is non-throwing. Never
+            // publish that potentially partial snapshot; keep the last-good state exactly as it was.
+            guard !Task.isCancelled else {
+                AppLog.debug(.refresh, "cancelled \(providerID) refresh; keeping last-good snapshot")
+                return .skipped
+            }
+            // A transient failure earns one immediate in-pass retry: the whole-batch failure bursts in
+            // the logs are connectivity flaps that clear within seconds, and without a retry each one
+            // paints an error on the card for a full refresh interval.
+            guard transientRetries < Self.maxTransientRetries,
+                  let message = Self.errorMessage(in: candidate),
+                  Self.isTransientlyRetryable(candidate.errorCategory)
+            else {
+                snapshot = candidate
+                break
+            }
+            transientRetries += 1
+            AppLog.info(.refresh, "\(providerID) transient failure (\(message)); retrying in \(Int(transientRetryDelay))s")
+            do {
+                try await Task.sleep(nanoseconds: UInt64(transientRetryDelay * 1_000_000_000))
+            } catch {
+                AppLog.debug(.refresh, "cancelled \(providerID) retry wait; keeping last-good snapshot")
+                return .skipped
+            }
         }
-        // A canceled refresh may still return if a provider's underlying work is non-throwing. Never
-        // publish that potentially partial snapshot; keep the last-good state exactly as it was.
-        guard !Task.isCancelled else {
-            AppLog.debug(.refresh, "cancelled \(providerID) refresh; keeping last-good snapshot")
-            return .skipped
+        if transientRetries > 0, Self.errorMessage(in: snapshot) == nil {
+            AppLog.info(.refresh, "\(providerID) recovered on retry")
         }
         let durationMs = durationMilliseconds(since: start)
         if TimeInterval(durationMs) >= slowProviderRefreshThreshold * 1000 {
@@ -534,6 +570,16 @@ final class WidgetDataStore {
         guard !snapshot.lines.isEmpty, snapshot.lines.allSatisfy(\.isError) else { return nil }
         if case .badge(_, let text, _, _) = snapshot.lines[0] { return text }
         return "Refresh failed"
+    }
+
+    /// Failure categories worth an immediate in-pass retry: transport flaps and server-side 5xx /
+    /// throttling often clear within seconds, while auth, decoding, and not-logged-in failures are
+    /// deterministic — retrying those would just double the cost of a known-broken provider.
+    private static func isTransientlyRetryable(_ category: ErrorCategory?) -> Bool {
+        switch category {
+        case .network, .http5xx, .rateLimited: true
+        default: false
+        }
     }
 
     func data(for descriptor: WidgetDescriptor) -> WidgetData {
