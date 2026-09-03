@@ -57,7 +57,9 @@ enum KimiUsageMapper {
         } else {
             throw KimiUsageError.invalidResponse
         }
-        let usedPercent = ProviderParse.clampPercent(used / limit * 100)
+        // Multiply before dividing: `(used / limit) * 100` introduces fp noise (14 → 14.000000000000002),
+        // while `used * 100 / limit` is exact whenever the true quotient is representable.
+        let usedPercent = ProviderParse.clampPercent(used * 100 / limit)
         let reset = (detail["resetTime"] as? String).flatMap(OpenUsageISO8601.date(from:))
             ?? (detail["resetAt"] as? String).flatMap(OpenUsageISO8601.date(from:))
             ?? (detail["reset_time"] as? String).flatMap(OpenUsageISO8601.date(from:))

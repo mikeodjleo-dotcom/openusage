@@ -26,16 +26,23 @@ final class KimiProvider: ProviderRuntime {
     }
 
     var widgetDescriptors: [WidgetDescriptor] {
-        [
-            .percent(id: "kimi.session", provider: provider, title: "Kimi 官方订阅 · 5-Hour Code", isSessionWindow: true)
+        var items: [WidgetDescriptor] = [
+            .percent(id: "kimi.session", provider: provider, title: "Allegro · 5-Hour Code", isSessionWindow: true)
                 .exportingLimit("officialSession", unit: "percent"),
-            .percent(id: "kimi.weekly", provider: provider, title: "Kimi 官方订阅 · 7-Day Code")
-                .exportingLimit("officialWeekly", unit: "percent"),
-            .percent(id: "kimi.key.session", provider: provider, title: "Kimi 拼车key · 5-Hour Code", isSessionWindow: true)
-                .exportingLimit("keySession", unit: "percent"),
-            .percent(id: "kimi.key.weekly", provider: provider, title: "Kimi 拼车key · 7-Day Code")
-                .exportingLimit("keyWeekly", unit: "percent")
+            .percent(id: "kimi.weekly", provider: provider, title: "Allegro · 7-Day Code")
+                .exportingLimit("officialWeekly", unit: "percent")
         ]
+        if authStore.loadAccounts().contains(where: { $0.kind == .sharedAPIKey }) {
+            items.append(
+                .percent(id: "kimi.key.session", provider: provider, title: "Kimi 拼车key · 5-Hour Code", isSessionWindow: true)
+                    .exportingLimit("keySession", unit: "percent")
+            )
+            items.append(
+                .percent(id: "kimi.key.weekly", provider: provider, title: "Kimi 拼车key · 7-Day Code")
+                    .exportingLimit("keyWeekly", unit: "percent")
+            )
+        }
+        return items
     }
 
     func hasLocalCredentials() async -> Bool {
@@ -55,9 +62,8 @@ final class KimiProvider: ProviderRuntime {
             provider: provider,
             account: primary?.account,
             accountEntries: entries,
-            plan: primary.map { entry in
-                [entry.plan, "主：\(entry.label)"].compactMap { $0 }.joined(separator: " · ")
-            },
+            // 只要套餐名（Allegro）。「主：官方订阅」是双号时代用来标主号的，拼车下线后会抢掉套餐位。
+            plan: primary?.plan,
             lines: entries.flatMap(flattenedLines),
             refreshedAt: now()
         )
@@ -194,7 +200,7 @@ final class KimiProvider: ProviderRuntime {
     }
 
     private func flattenedLines(_ entry: ProviderAccountEntry) -> [MetricLine] {
-        let prefix = entry.label + " · "
+        let prefix = (entry.plan ?? (entry.isPrimary ? "Allegro" : entry.label)) + " · "
         if entry.availability != .available {
             let message = entry.message ?? "不可用"
             return ["5-Hour Code", "7-Day Code"].map {

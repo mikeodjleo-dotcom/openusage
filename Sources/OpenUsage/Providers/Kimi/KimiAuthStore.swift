@@ -117,11 +117,14 @@ struct KimiAuthStore: Sendable {
             )
         }
 
+        // 拼车 key 从 CLI config 拿掉后不再占一张「未找到凭据」卡（爸 08-29：现在不用了）。
+        // 真写回 [providers.kimi-code-key] 的 api_key 时才重新出这一路。
+        guard let staticAPIKey = config.staticAPIKey else { return [oauth] }
         let key = KimiAccountCredential(
             kind: .sharedAPIKey,
             isPrimary: config.activeProvider == config.staticProvider,
-            availability: config.staticAPIKey == nil ? .missingCredential : .available,
-            auth: config.staticAPIKey.map { KimiAuth(token: $0, source: .apiKey) },
+            availability: .available,
+            auth: KimiAuth(token: staticAPIKey, source: .apiKey),
             oauthCredential: nil,
             deviceID: nil
         )

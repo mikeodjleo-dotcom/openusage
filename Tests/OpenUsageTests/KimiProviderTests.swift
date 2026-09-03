@@ -3,23 +3,28 @@ import XCTest
 
 final class KimiProviderTests: XCTestCase {
     @MainActor
-    func testProviderDefaultsExposeBothMenuBarMeters() {
-        let provider = KimiProvider()
-        XCTAssertEqual(provider.widgetDescriptors.map(\.id), [
-            "kimi.session", "kimi.weekly", "kimi.key.session", "kimi.key.weekly"
-        ])
+    func testOfficialWidgetsAreAlwaysExposed() {
+        let provider = KimiProvider(authStore: accountStore(defaultModel: "kimi-code/k3", includeKey: false))
+        XCTAssertEqual(provider.widgetDescriptors.map(\.id), ["kimi.session", "kimi.weekly"])
         XCTAssertEqual(provider.widgetDescriptors.map(\.sample.title), [
-            "Kimi 官方订阅 · 5-Hour Code", "Kimi 官方订阅 · 7-Day Code",
-            "Kimi 拼车key · 5-Hour Code", "Kimi 拼车key · 7-Day Code"
+            "Allegro · 5-Hour Code", "Allegro · 7-Day Code"
         ])
         XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.session"))
         XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.weekly"))
-        XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.key.session"))
-        XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.key.weekly"))
         XCTAssertTrue(DefaultLayout.pinnedMetricIDs.contains("kimi.session"))
         XCTAssertTrue(DefaultLayout.pinnedMetricIDs.contains("kimi.weekly"))
         XCTAssertFalse(DefaultLayout.pinnedMetricIDs.contains("kimi.key.session"))
         XCTAssertFalse(DefaultLayout.pinnedMetricIDs.contains("kimi.key.weekly"))
+    }
+
+    @MainActor
+    func testKeyWidgetsAppearOnlyWhenStaticKeyExists() {
+        let withKey = KimiProvider(authStore: accountStore(defaultModel: "kimi-code/k3", includeKey: true))
+        XCTAssertEqual(withKey.widgetDescriptors.map(\.id), [
+            "kimi.session", "kimi.weekly", "kimi.key.session", "kimi.key.weekly"
+        ])
+        XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.key.session"))
+        XCTAssertTrue(DefaultLayout.metricIDs.contains("kimi.key.weekly"))
     }
 
     func testReadsStaticKimiKeyFromCLIConfig() {
@@ -261,7 +266,7 @@ final class KimiProviderTests: XCTestCase {
         XCTAssertEqual(entries.map(\.availability), [.available, .available])
         XCTAssertEqual(entries[1].account?.id, "shared-user")
         XCTAssertEqual(snapshot.lines.map(\.label), [
-            "Kimi 官方订阅 · 5-Hour Code", "Kimi 官方订阅 · 7-Day Code",
+            "Allegro · 5-Hour Code", "Allegro · 7-Day Code",
             "Kimi 拼车key · 5-Hour Code", "Kimi 拼车key · 7-Day Code"
         ])
         XCTAssertEqual(http.requests.count, 2)
@@ -289,7 +294,7 @@ final class KimiProviderTests: XCTestCase {
     }
 
     @MainActor
-    func testMissingStaticKeyStaysVisibleAsUnavailableEntry() async throws {
+    func testMissingStaticKeyIsOmitted() async throws {
         let authStore = accountStore(defaultModel: "kimi-code/k3", includeKey: false)
         let provider = KimiProvider(
             authStore: authStore,
@@ -300,13 +305,9 @@ final class KimiProviderTests: XCTestCase {
         let snapshot = await provider.refresh()
 
         let entries = try XCTUnwrap(snapshot.accountEntries)
-        XCTAssertEqual(entries.count, 2)
-        XCTAssertEqual(entries[1].availability, .missingCredential)
-        XCTAssertEqual(entries[1].message, "未找到凭据")
-        XCTAssertTrue(snapshot.lines.suffix(2).allSatisfy { line in
-            guard case .badge(_, let text, _, _) = line else { return false }
-            return text == "未找到凭据"
-        })
+        XCTAssertEqual(entries.map(\.label), ["Kimi 官方订阅"])
+        XCTAssertFalse(snapshot.lines.contains { $0.label.contains("拼车key") })
+        XCTAssertEqual(provider.widgetDescriptors.map(\.id), ["kimi.session", "kimi.weekly"])
     }
 
     func testMapsRealUsageFixtureToOfficialCodeWindows() throws {

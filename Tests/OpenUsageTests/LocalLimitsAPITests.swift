@@ -221,7 +221,9 @@ final class LocalLimitsAPITests: XCTestCase {
             "copilot": ["premiumCredits", "extraUsage", "orgCredits", "orgSpend", "chat", "completions"],
             "devin": ["daily", "weekly", "extraUsageBalance"],
             "grok": ["weekly"],
-            "kimi": ["session", "weekly"],
+            // Kimi exports the 拼车key pair (keySession/keyWeekly) only when a static key is configured
+            // (see KimiProvider.widgetDescriptors); the default no-key environment exports the official pair.
+            "kimi": ["officialSession", "officialWeekly"],
             "opencode": ["session", "weekly", "monthly"],
             "openrouter": ["credits", "balance", "keyLimit"],
             "zai": ["session", "weekly", "webSearches"]
