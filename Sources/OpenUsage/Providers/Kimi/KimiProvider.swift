@@ -53,8 +53,9 @@ final class KimiProvider: ProviderRuntime {
 
     func refresh() async -> ProviderSnapshot {
         let credentials = await loadOffMainActor { [authStore] in authStore.loadAccounts() }
+        let sorted = credentials.sorted(by: { $0.isPrimary && !$1.isPrimary })
         var entries: [ProviderAccountEntry] = []
-        for credential in credentials.sorted(by: { $0.isPrimary && !$1.isPrimary }) {
+        for credential in sorted {
             entries.append(await refreshAccount(credential))
         }
         let primary = entries.first(where: \.isPrimary) ?? entries.first
@@ -64,7 +65,7 @@ final class KimiProvider: ProviderRuntime {
             accountEntries: entries,
             // 只要套餐名（Allegro）。「主：官方订阅」是双号时代用来标主号的，拼车下线后会抢掉套餐位。
             plan: primary?.plan,
-            lines: entries.flatMap(flattenedLines),
+            lines: zip(sorted, entries).flatMap { flattenedLines($1, kind: $0.kind) },
             refreshedAt: now()
         )
     }
@@ -199,8 +200,10 @@ final class KimiProvider: ProviderRuntime {
         )
     }
 
-    private func flattenedLines(_ entry: ProviderAccountEntry) -> [MetricLine] {
-        let prefix = (entry.plan ?? (entry.isPrimary ? "Allegro" : entry.label)) + " · "
+    private func flattenedLines(_ entry: ProviderAccountEntry, kind: KimiAccountKind) -> [MetricLine] {
+        // 官方订阅的行用套餐名（Allegro）做前缀；拼车 key 的行始终用它自己的标签——key 账号的 API
+        // 也会返回 plan，不能拿来盖掉「Kimi 拼车key」，否则两个账号的行标题撞名。
+        let prefix = (kind == .officialSubscription ? (entry.plan ?? entry.label) : entry.label) + " · "
         if entry.availability != .available {
             let message = entry.message ?? "不可用"
             return ["5-Hour Code", "7-Day Code"].map {
