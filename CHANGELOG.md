@@ -1,5 +1,20 @@
 # Changelog
 
+## aix-v0.7.6-aix.7
+
+### New Features
+- Kimi: monitor two accounts side by side — the primary entry follows the CLI's active channel (official subscription first) and the carpool key drops to a secondary entry; usage windows match the website (5h/7d + resetsAt), and unavailable states fail loudly (F-66).
+
+### Bug Fixes
+- Refresh: retry a transient failure (network unreachable, server 5xx, rate limited) once after a few seconds within the same pass, so a momentary network blip no longer pins an error on the card for a whole refresh interval; deterministic failures (not logged in, undecodable response) still fail immediately.
+- Kimi: refresh rotated OAuth credentials.
+- Kimi: show the official subscription name for the plan — LEVEL_ADVANCED maps to Allegro, unknown tiers keep a readable fallback.
+
+---
+
+### Changelog
+**Full Changelog**: [aix-v0.7.6-aix.6...aix-v0.7.6-aix.7](https://github.com/mikeodjleo-dotcom/openusage/compare/aix-v0.7.6-aix.6...aix-v0.7.6-aix.7)
+
 ## aix-v0.7.6-aix.5
 
 ### Bug Fixes
