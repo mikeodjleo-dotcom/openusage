@@ -306,7 +306,16 @@ final class AntigravityProvider: ProviderRuntime {
     }
 
     private func loadPlan(token: String) async -> String? {
-        if case .ok(let data) = await usageClient.cloudCode(path: AntigravityUsageClient.loadCodeAssistPath, token: token, userAgent: "agy", body: [:]) {
+        // UA must be `antigravity`. `agy` is the Gemini Code Assist client: Google returns
+        // allowedTiers/ineligibleTiers and omits currentTier/paidTier, so plan stays blank
+        // and callers fall back to the product name. `antigravity` returns
+        // paidTier.name = "Google AI Pro" (formatPlan → "Pro").
+        if case .ok(let data) = await usageClient.cloudCode(
+            path: AntigravityUsageClient.loadCodeAssistPath,
+            token: token,
+            userAgent: "antigravity",
+            body: [:]
+        ) {
             return AntigravityUsageMapper.parseLoadCodeAssistPlan(data)
         }
         return nil
