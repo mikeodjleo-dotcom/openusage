@@ -72,6 +72,7 @@ public struct UsageReader {
             claudeCards: accountAssembly.claudeCards,
             defaultClaudeExtraLogRoots: accountAssembly.defaultClaudeExtraLogRoots,
             codexCards: accountAssembly.codexCards,
+            defaultCodexCard: accountAssembly.defaultCodexCard,
             defaultCodexExtraLogRoots: accountAssembly.defaultCodexExtraLogRoots
         )
         let registry = WidgetRegistry.from(providers)

@@ -14,6 +14,7 @@ enum ProviderCatalog {
         claudeCards: [ClaudeAccountCard] = [],
         defaultClaudeExtraLogRoots: [URL] = [],
         codexCards: [CodexAccountCard] = [],
+        defaultCodexCard: CodexAccountCard? = nil,
         defaultCodexExtraLogRoots: [URL] = []
     ) -> [ProviderRuntime] {
         // Default provider order (see AGENTS.md "## Providers"): the three established providers first,
@@ -34,9 +35,13 @@ enum ProviderCatalog {
         for card in claudeCards {
             runtimes.append(claudeAccountRuntime(card: card))
         }
-        runtimes.append(CodexProvider(
-            logUsageScanner: CodexLogUsageScanner(additionalHomes: defaultCodexExtraLogRoots)
-        ))
+        if let defaultCodexCard {
+            runtimes.append(codexAccountRuntime(card: defaultCodexCard))
+        } else if !codexCards.contains(where: { $0.id == "codex" }) {
+            runtimes.append(CodexProvider(
+                logUsageScanner: CodexLogUsageScanner(additionalHomes: defaultCodexExtraLogRoots)
+            ))
+        }
         for card in codexCards {
             runtimes.append(codexAccountRuntime(card: card))
         }
@@ -70,7 +75,7 @@ enum ProviderCatalog {
         )
     }
 
-    /// An extra Codex account runtime pinned to one OAuth home and its own session logs. The scoped
+    /// A resolved Codex account runtime pinned to one OAuth home and its own session logs. The scoped
     /// auth store disables the shared keychain fallback, preventing the default App account from
     /// authenticating a CLI card.
     private static func codexAccountRuntime(card: CodexAccountCard) -> CodexProvider {

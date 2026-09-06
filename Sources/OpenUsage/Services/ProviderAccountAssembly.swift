@@ -19,7 +19,7 @@ struct ClaudeAccountCard: Equatable, Sendable {
     var extraLogRoots: [URL] = []
 }
 
-/// One extra file-backed Codex account card. Its credential reads, token rotation, and local spend
+/// One file-backed Codex account card. Its credential reads, token rotation, and local spend
 /// scan are all pinned to the listed homes.
 struct CodexAccountCard: Equatable, Sendable {
     var id: String
@@ -43,8 +43,12 @@ struct ProviderAccountAssembly {
     /// Same-account custom config dirs discovered for the DEFAULT card's login: extra spend-log
     /// roots for the default scanner, never extra credentials.
     var defaultClaudeExtraLogRoots: [URL] = []
-    /// Extra Codex account cards found on this computer this launch, in stable id order.
+    /// Codex accounts found outside the current default home, in stable id order. May include the
+    /// permanent bare `codex` record when CODEX_HOME now selects another account.
     var codexCards: [CodexAccountCard] = []
+    /// The account currently at the default home, using its permanent record id (which may be
+    /// hashed). Its credentials must stay pinned to the same home that supplied its identity.
+    var defaultCodexCard: CodexAccountCard? = nil
     /// Additional homes carrying the default Codex account. Their logs fold into the default card.
     var defaultCodexExtraLogRoots: [URL] = []
 
@@ -268,15 +272,27 @@ struct ProviderAccountAssembly {
         }
         claudeCards.sort { $0.id < $1.id }
 
+        var defaultCodexCard: CodexAccountCard?
+        if case .resolved(let identityKey, _, let anchor) = codexOutcome,
+           let record = records.first(where: { $0.family == "codex" && $0.identityKey == identityKey }) {
+            identityKeys.removeValue(forKey: "codex")
+            identityKeys[record.id] = identityKey
+            defaultCodexCard = CodexAccountCard(
+                id: record.id,
+                displayName: record.derivedDisplayName,
+                homePath: anchor,
+                extraLogRoots: defaultCodexExtraLogRoots
+            )
+            AppLog.info(.config, "accounts: default codex card \(record.id) bound to \(anchor)")
+        }
+
         var codexCards: [CodexAccountCard] = []
         for account in foundCodexAccounts {
             guard let record = records.first(where: { $0.family == "codex" && $0.identityKey == account.identityKey }),
                   let primary = account.homes.first
             else { continue }
-            guard record.id != "codex" else {
-                AppLog.warn(.config, "discovery: the codex record's account now lives outside the default home; its card is unavailable until swap support lands")
-                continue
-            }
+            // A permanent bare id does not mean this account still occupies the default home.
+            // Build it from the discovered home, just like any other account record.
             codexCards.append(CodexAccountCard(
                 id: record.id,
                 displayName: record.derivedDisplayName,
@@ -293,6 +309,7 @@ struct ProviderAccountAssembly {
             claudeCards: claudeCards,
             defaultClaudeExtraLogRoots: defaultClaudeExtraLogRoots,
             codexCards: codexCards,
+            defaultCodexCard: defaultCodexCard,
             defaultCodexExtraLogRoots: defaultCodexExtraLogRoots
         )
     }
