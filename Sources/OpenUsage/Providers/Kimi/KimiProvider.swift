@@ -203,7 +203,9 @@ final class KimiProvider: ProviderRuntime {
     private func flattenedLines(_ entry: ProviderAccountEntry, kind: KimiAccountKind) -> [MetricLine] {
         // 官方订阅的行用套餐名（Allegro）做前缀；拼车 key 的行始终用它自己的标签——key 账号的 API
         // 也会返回 plan，不能拿来盖掉「Kimi 拼车key」，否则两个账号的行标题撞名。
-        let prefix = (kind == .officialSubscription ? (entry.plan ?? entry.label) : entry.label) + " · "
+        // 官方订阅前缀固定为「Allegro」，与 widgetDescriptors 的卡片标题一致：面板按标题精确匹配行，
+        // 09-14 起 usages 接口不再返回 user.membership.level，前缀跟着 plan 走会让卡片全部 No data。
+        let prefix = (kind == .officialSubscription ? "Allegro" : entry.label) + " · "
         if entry.availability != .available {
             let message = entry.message ?? "不可用"
             return ["5-Hour Code", "7-Day Code"].map {
