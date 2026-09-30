@@ -40,7 +40,8 @@ final class ClaudeProvider: ProviderRuntime {
     /// it every relaunch started from nothing: the first fetch hit an endpoint that was still limiting us,
     /// got a fresh 429, and the card showed bare "No data" until the cooldown ran out (2026-09-30: two
     /// restarts in five minutes blanked the Claude card for an hour). One file per card under
-    /// `liveUsageCacheDirectory`; `nil` disables persistence.
+    /// `liveUsageCacheDirectory`; `nil` (the default — tests) disables persistence, ProviderCatalog opts
+    /// the real cards in.
     private let liveUsageCacheURL: URL?
 
     private struct PersistedLiveUsage: Codable {
@@ -61,7 +62,7 @@ final class ClaudeProvider: ProviderRuntime {
         logUsageScanner: ClaudeLogUsageScanner = ClaudeLogUsageScanner(),
         now: @escaping @Sendable () -> Date = Date.init,
         pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
-        liveUsageCacheDirectory: URL? = ClaudeProvider.defaultLiveUsageCacheDirectory
+        liveUsageCacheDirectory: URL? = nil
     ) {
         self.provider = provider
         self.authStore = authStore

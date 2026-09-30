@@ -30,7 +30,8 @@ enum ProviderCatalog {
             // belongs to one of them — fetching that account's usage onto the default card. Desktop
             // returns as its own properly-pinned source kind in Phase 3.
             authStore: ClaudeAuthStore(allowsDesktopFallback: claudeCards.isEmpty),
-            logUsageScanner: ClaudeLogUsageScanner(additionalRoots: defaultClaudeExtraLogRoots)
+            logUsageScanner: ClaudeLogUsageScanner(additionalRoots: defaultClaudeExtraLogRoots),
+            liveUsageCacheDirectory: ClaudeProvider.defaultLiveUsageCacheDirectory
         ))
         for card in claudeCards {
             runtimes.append(claudeAccountRuntime(card: card))
@@ -71,7 +72,8 @@ enum ProviderCatalog {
             logUsageScanner: ClaudeLogUsageScanner(
                 cacheIdentityOverride: "claude-account:\(card.id)",
                 rootsOverride: [URL(fileURLWithPath: card.configDirPath)] + card.extraLogRoots
-            )
+            ),
+            liveUsageCacheDirectory: ClaudeProvider.defaultLiveUsageCacheDirectory
         )
     }
 
