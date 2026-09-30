@@ -1,6 +1,6 @@
 import Foundation
 
-struct ClaudeMappedUsage: Equatable, Sendable {
+struct ClaudeMappedUsage: Equatable, Sendable, Codable {
     var plan: String?
     var lines: [MetricLine]
     /// Provider header notice (amber triangle + tooltip) riding along with this usage, e.g. the

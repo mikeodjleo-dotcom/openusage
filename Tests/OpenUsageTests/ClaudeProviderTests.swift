@@ -733,6 +733,74 @@ final class ClaudeProviderTests: XCTestCase {
         XCTAssertEqual(httpClient.requests.filter { $0.url.absoluteString.hasSuffix("/api/oauth/usage") }.count, 2)
     }
 
+    func testLiveUsageCacheAndCooldownSurviveRelaunch() async throws {
+        // A relaunch must not blank the card: the last-good bars and the 429 cooldown persist on disk per
+        // credential pair, so a fresh provider (= new process) serves the cached bar and, once a cooldown
+        // is on record, does not even call the limited endpoint.
+        let t0 = OpenUsageISO8601.date(from: "2026-02-20T16:00:00.000Z")!
+        let clock = TestClock(t0)
+        let cacheDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claude-live-usage-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: cacheDir) }
+        let usageCalls = CallCounter()
+        let httpClient = RoutingHTTPClient { request in
+            guard request.url.absoluteString.hasSuffix("/api/oauth/usage") else {
+                return HTTPResponse(statusCode: 200, headers: [:], body: Data())
+            }
+            if usageCalls.next() == 1 {
+                return HTTPResponse(
+                    statusCode: 200,
+                    headers: [:],
+                    body: Data(#"{"five_hour":{"utilization":25,"resets_at":"2099-01-01T00:00:00.000Z"}}"#.utf8)
+                )
+            }
+            return HTTPResponse(statusCode: 429, headers: ["retry-after": "600"], body: Data())
+        }
+        func launch(credentials: String = "token") -> ClaudeProvider {
+            ClaudeProvider(
+                authStore: ClaudeAuthStore(
+                    environment: FakeEnvironment(["CLAUDE_CONFIG_DIR": "/tmp/claude"]),
+                    files: FakeFiles([
+                        "/tmp/claude/.credentials.json": #"{"claudeAiOauth":{"accessToken":"\#(credentials)","subscriptionType":"pro","scopes":["user:profile"]}}"#
+                    ]),
+                    keychain: FakeKeychain(),
+                    now: { clock.now }
+                ),
+                usageClient: ClaudeUsageClient(httpClient: httpClient),
+                logUsageScanner: ClaudeLogFixture.scanner(home: nil),
+                now: { clock.now },
+                pricing: { TestPricing.bundled },
+                liveUsageCacheDirectory: cacheDir
+            )
+        }
+        func usageCallCount() -> Int {
+            httpClient.requests.filter { $0.url.absoluteString.hasSuffix("/api/oauth/usage") }.count
+        }
+
+        // Run 1: live fetch succeeds → cached on disk.
+        let first = await launch().refresh()
+        XCTAssertEqual(Self.progress(first.lines, "Session")?.used, 25)
+
+        // Run 2 (relaunch): the endpoint is limiting us. Still the cached bar + note, not a bare badge.
+        let second = await launch().refresh()
+        XCTAssertEqual(Self.progress(second.lines, "Session")?.used, 25)
+        XCTAssertNil(badge(second.lines, "Status"))
+        XCTAssertEqual(second.warning?.hasPrefix("Updates blocked by Anthropic"), true)
+        XCTAssertEqual(usageCallCount(), 2)
+
+        // Run 3 (relaunch inside the cooldown): no live call at all, bar still shown.
+        clock.set(t0.addingTimeInterval(60))
+        let third = await launch().refresh()
+        XCTAssertEqual(Self.progress(third.lines, "Session")?.used, 25)
+        XCTAssertEqual(third.warning?.hasPrefix("Updates blocked by Anthropic"), true)
+        XCTAssertEqual(usageCallCount(), 2)
+
+        // A different login never inherits another pair's cache or cooldown: it calls live and gets the badge.
+        let other = await launch(credentials: "other-token").refresh()
+        XCTAssertNotNil(badge(other.lines, "Status"))
+        XCTAssertEqual(usageCallCount(), 3)
+    }
+
     func testRefreshSurfacesRequestFailureForNonOAuthRefreshErrorBody() async {
         // The usage call 401s (forcing a refresh); the refresh endpoint then returns a non-OAuth 400
         // (an HTML proxy/WAF page). The snapshot must report a request failure, NOT "token expired" —

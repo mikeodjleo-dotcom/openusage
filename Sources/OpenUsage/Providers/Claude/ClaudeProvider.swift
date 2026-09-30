@@ -36,13 +36,32 @@ final class ClaudeProvider: ProviderRuntime {
     private var rateLimitedUntil: Date?
     private static let rateLimitCooldown: TimeInterval = 5 * 60
 
+    /// On-disk mirror of `lastGoodUsage` + `rateLimitedUntil`, keyed by the credential fingerprint. Without
+    /// it every relaunch started from nothing: the first fetch hit an endpoint that was still limiting us,
+    /// got a fresh 429, and the card showed bare "No data" until the cooldown ran out (2026-09-30: two
+    /// restarts in five minutes blanked the Claude card for an hour). One file per card under
+    /// `liveUsageCacheDirectory`; `nil` disables persistence.
+    private let liveUsageCacheURL: URL?
+
+    private struct PersistedLiveUsage: Codable {
+        var fingerprint: Data
+        var lastGoodUsage: ClaudeMappedUsage?
+        var rateLimitedUntil: Date?
+    }
+
+    static var defaultLiveUsageCacheDirectory: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("OpenUsage/claude-live-usage", isDirectory: true)
+    }
+
     init(
         provider: Provider = ClaudeProvider.makeProvider(),
         authStore: ClaudeAuthStore = ClaudeAuthStore(),
         usageClient: ClaudeUsageClient = ClaudeUsageClient(),
         logUsageScanner: ClaudeLogUsageScanner = ClaudeLogUsageScanner(),
         now: @escaping @Sendable () -> Date = Date.init,
-        pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() }
+        pricing: @escaping @Sendable () async -> ModelPricing = { await ModelPricingStore.shared.current() },
+        liveUsageCacheDirectory: URL? = ClaudeProvider.defaultLiveUsageCacheDirectory
     ) {
         self.provider = provider
         self.authStore = authStore
@@ -50,6 +69,7 @@ final class ClaudeProvider: ProviderRuntime {
         self.logUsageScanner = logUsageScanner
         self.now = now
         self.pricing = pricing
+        self.liveUsageCacheURL = liveUsageCacheDirectory?.appendingPathComponent("\(provider.id).json")
     }
 
     var widgetDescriptors: [WidgetDescriptor] {
@@ -367,12 +387,14 @@ final class ClaudeProvider: ProviderRuntime {
             let retryAfterSeconds = ClaudeUsageMapper.parseRetryAfterSeconds(response, now: now())
             rateLimitedUntil = now().addingTimeInterval(TimeInterval(retryAfterSeconds ?? Int(Self.rateLimitCooldown)))
             AppLog.info(LogTag.plugin("claude"), "rate-limited (serving \(lastGoodUsage == nil ? "badge" : "last-good usage"))")
+            persistLiveUsageCache()
             return rateLimitedSnapshot(credentials: working.oauth, retryAfterSeconds: retryAfterSeconds)
         }
 
         let mapped = try ClaudeUsageMapper.mapUsageResponse(response, credentials: working.oauth, now: now())
         lastGoodUsage = mapped
         rateLimitedUntil = nil
+        persistLiveUsageCache()
         return mapped
     }
 
@@ -397,6 +419,28 @@ final class ClaudeProvider: ProviderRuntime {
         cachedCredentialFingerprint = fingerprint
         lastGoodUsage = nil
         rateLimitedUntil = nil
+        // A previous run's state for this exact credential pair survives relaunch; a different login
+        // (or a token rotated by Claude Code in between) starts clean, as before.
+        if let url = liveUsageCacheURL,
+           let data = try? Data(contentsOf: url),
+           let persisted = try? JSONDecoder().decode(PersistedLiveUsage.self, from: data),
+           persisted.fingerprint == fingerprint {
+            lastGoodUsage = persisted.lastGoodUsage
+            if let until = persisted.rateLimitedUntil, now() < until { rateLimitedUntil = until }
+            AppLog.info(LogTag.plugin("claude"), "restored live-usage cache (last-good: \(lastGoodUsage != nil), cooldown: \(rateLimitedUntil != nil))")
+        }
+    }
+
+    /// Best-effort; a write failure only costs the next relaunch its warm start.
+    private func persistLiveUsageCache() {
+        guard let url = liveUsageCacheURL, let fingerprint = cachedCredentialFingerprint else { return }
+        let persisted = PersistedLiveUsage(fingerprint: fingerprint, lastGoodUsage: lastGoodUsage, rateLimitedUntil: rateLimitedUntil)
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try JSONEncoder().encode(persisted).write(to: url, options: .atomic)
+        } catch {
+            AppLog.warn(LogTag.plugin("claude"), "live-usage cache write failed: \(error.localizedDescription)")
+        }
     }
 
     private static func credentialFingerprint(_ credentials: ClaudeOAuth) -> Data {
@@ -464,6 +508,7 @@ final class ClaudeProvider: ProviderRuntime {
         }
         if cachedCredentialFingerprint == Self.credentialFingerprint(previousOAuth) {
             cachedCredentialFingerprint = Self.credentialFingerprint(state.oauth)
+            persistLiveUsageCache()   // re-key the on-disk copy so the rotated pair still warm-starts next launch
         }
         AppLog.info(LogTag.auth("claude"), "token refresh ok (rotated)")
         return RefreshedAccess(accessToken: decoded.accessToken, persisted: persisted)
