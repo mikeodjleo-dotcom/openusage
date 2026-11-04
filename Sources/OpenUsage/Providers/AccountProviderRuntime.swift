@@ -150,11 +150,25 @@ final class AccountProviderRuntime: ProviderRuntime {
         let load = credentialLoad?.task ?? Task { try await loadOffMainActor { [vault, account] in try vault.load(account.id) } }
         credentialLoad = (load, credentialWrites)
         defer { if credentialLoad?.task == load { credentialLoad = nil } }
-        guard let credential = try await load.value else { throw refusedCredential }
+        var stored = try await load.value
+        if stored == nil { stored = await localLoginMarker() }
+        guard let credential = stored else { throw refusedCredential }
         if credential == .localCLI, account.kind == .claude { return try await claudeCodeCredential() }
         if credential == .localCLI, account.kind == .antigravity { return try await antigravityLocalCredential() }
         if case .localCodex(let accountID) = credential { return try await codexLocalCredential(accountID: accountID) }
         return credential
+    }
+
+    /// Aix fork: a local-login account holds no secret, so its Keychain marker is only a convenience. Without
+    /// one (accounts seeded over SSH, where the Keychain is locked) the account's own fields say the same.
+    private func localLoginMarker() async -> AccountCredential? {
+        if account.kind == .kimi { return .localCLI }
+        guard account.usesLocalCLI == true else { return nil }
+        guard account.kind == .codex else { return .localCLI }
+        guard let home = account.localCLIHome else { return nil }
+        let source = codexLocalSource
+        let login = try? await loadOffMainActor { source.login(home: home) }
+        return login.flatMap { $0 }.map { .localCodex(accountID: $0.accountID) }
     }
 
     /// A refused sign-in has to be added again; a refused key or token can be replaced on the page; a

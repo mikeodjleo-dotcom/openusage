@@ -117,6 +117,24 @@ final class CodexLocalLoginTests: XCTestCase {
         XCTAssertEqual(try vault.load(runtime.account.id), .localCodex(accountID: "acct-a"), "the Keychain keeps no copy")
     }
 
+    func testALocalLoginWithNoKeychainMarkerStillReads() async throws {
+        let home = try writeHome(".codex-cli", Self.auth(token: "live"))
+        let (runtime, http, vault) = try makeRuntime(home: home)
+        try vault.delete(runtime.account.id)
+
+        _ = try await runtime.refresh().get()
+
+        XCTAssertEqual(http.requests.first { $0.url == CodexUsageClient.usageURL }?.headers["ChatGPT-Account-Id"], "acct-a")
+    }
+
+    func testAnOAuthAccountWithNoCredentialIsStillRefused() async throws {
+        let vault = InMemoryCredentialVault()
+        let http = RoutingHTTPClient { _ in .json(Self.usage) }
+        let runtime = AccountProviderRuntime(account: Account(kind: .codex, label: "x"), vault: vault, http: http, now: { Self.start })
+        if case .success = await runtime.refresh() { XCTFail("no credential must not read") }
+        XCTAssertTrue(http.requests.isEmpty)
+    }
+
     func testEachAccountReadsItsOwnHome() async throws {
         let first = try writeHome(".codex", Self.auth(token: "one", account: "acct-a"))
         let second = try writeHome(".codex-cli", Self.auth(token: "two", account: "acct-b"))
