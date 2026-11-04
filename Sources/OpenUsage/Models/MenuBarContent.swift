@@ -15,6 +15,19 @@ struct MenuBarContent: Equatable {
 
     var isEmpty: Bool { items.isEmpty }
 
+    /// One menu-bar segment per account, in first-seen order. At most two values fit a segment's height.
+    var groups: [(provider: Provider, items: [Item])] {
+        var result: [(provider: Provider, items: [Item])] = []
+        for item in items {
+            if let index = result.firstIndex(where: { $0.provider.id == item.provider.id }) {
+                if result[index].items.count < 2 { result[index].items.append(item) }
+            } else {
+                result.append((item.provider, [item]))
+            }
+        }
+        return result
+    }
+
     var accessibilityText: String {
         let shown = items.map { "\($0.provider.fullName) \($0.label) \($0.value)" }
         let more = overflow > 0 ? ["\(overflow) more"] : []

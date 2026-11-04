@@ -54,12 +54,12 @@ final class MenuBarStripTrimTests: XCTestCase {
 
     func testTheItemsAndTheOverflowEachWidenTheStrip() throws {
         let one = MenuBarContent(items: [item("claude.session", "Session", "99%")])
-        let two = MenuBarContent(items: [item("claude.session", "Session", "99%"), item("claude.weekly", "Weekly", "87%")])
+        let two = MenuBarContent(items: [item("claude.session", "Session", "99%"), item("codex.weekly", "Weekly", "87%")])
         var more = two
         more.overflow = 7
 
         let widths = try [one, two, more].map { try XCTUnwrap(MenuBarStripRenderer.image(for: $0)).size.width }
-        XCTAssertGreaterThan(widths[1], widths[0] * 1.5, "two limits of one account drew one item")
+        XCTAssertGreaterThan(widths[1], widths[0] * 1.5, "two accounts drew one segment")
         XCTAssertGreaterThan(widths[2], widths[1] + 11, "the overflow drew nothing")
     }
 

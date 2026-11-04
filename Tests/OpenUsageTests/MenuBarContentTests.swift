@@ -33,6 +33,14 @@ final class MenuBarContentTests: XCTestCase {
         XCTAssertEqual(content.overflow, 0)
     }
 
+    func testGroupsShowOneSegmentPerAccountWithAtMostTwoValues() throws {
+        let accounts = [account(personal, limit("A", used: 1), limit("B", used: 2), limit("C", used: 3)),
+                        account(chatGPT, limit("D", used: 4))]
+        let content = try XCTUnwrap(MenuBarContentBuilder.build(accounts: accounts, pinned: Set(accounts.flatMap(\.lines).map(\.id)), limit: .upToFive))
+        XCTAssertEqual(content.groups.map(\.provider.id), [personal.id, chatGPT.id])
+        XCTAssertEqual(content.groups.map { $0.items.map(\.label) }, [["A", "B"], ["D"]])
+    }
+
     func testAutomaticStripWithoutPinsOrWhenIconOnly() {
         let accounts = [account(personal, limit("Weekly", used: 99))]
         XCTAssertNil(MenuBarContentBuilder.build(accounts: accounts, pinned: [], limit: .upToThree))

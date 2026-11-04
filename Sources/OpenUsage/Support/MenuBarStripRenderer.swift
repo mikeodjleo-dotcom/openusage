@@ -79,11 +79,11 @@ private struct MenuBarTextStrip: View {
 
     var body: some View {
         HStack(spacing: 11) {
-            ForEach(content.items) { item in
+            ForEach(content.groups, id: \.provider.id) { group in
                 HStack(spacing: 4) {
-                    glyph(item.provider.icon)
+                    glyph(group.provider.icon)
                         .overlay(alignment: .bottomTrailing) {
-                            if let badge = item.provider.badge {
+                            if let badge = group.provider.badge {
                                 AccountBadge(text: badge)
                                     .offset(x: AccountBadge.overhang.width, y: AccountBadge.overhang.height)
                             }
@@ -91,9 +91,9 @@ private struct MenuBarTextStrip: View {
                         .compositingGroup()
                         // The renderer draws only inside layout bounds, so reserve the badge's overhang
                         // (vertically on both sides, keeping the mark centred on its values) or it is cut off.
-                        .padding(.trailing, item.provider.badge == nil ? 0 : AccountBadge.overhang.width)
-                        .padding(.vertical, item.provider.badge == nil ? 0 : AccountBadge.overhang.height)
-                    labelledValue(item)
+                        .padding(.trailing, group.provider.badge == nil ? 0 : AccountBadge.overhang.width)
+                        .padding(.vertical, group.provider.badge == nil ? 0 : AccountBadge.overhang.height)
+                    values(group.items)
                 }
             }
             if content.overflow > 0 {
@@ -112,14 +112,22 @@ private struct MenuBarTextStrip: View {
         .compositingGroup()
     }
 
-    private func labelledValue(_ item: MenuBarContent.Item) -> some View {
-        VStack(alignment: .leading, spacing: -2) {
-            Text(item.shortLabel)
-                .font(.system(size: 9, weight: .medium))
-            Text(item.value)
-                .font(.system(size: 11, weight: .bold))
+    /// Aix fork, as in 0.7: one account's values with no labels, read by position. One value as a single
+    /// large number, two stacked on tight lines.
+    @ViewBuilder
+    private func values(_ items: [MenuBarContent.Item]) -> some View {
+        if items.count <= 1 {
+            Text(items.first?.value ?? "")
+                .font(.system(size: 12, weight: .bold))
+        } else {
+            VStack(alignment: .trailing, spacing: -2) {
+                ForEach(items) { item in
+                    Text(item.value)
+                }
+            }
+            .font(.system(size: 9, weight: .semibold))
+            .fixedSize()
         }
-        .fixedSize()
     }
 
     private func overflowCount(_ count: Int) -> some View {
