@@ -184,10 +184,10 @@ final class StatusItemController: NSObject {
     }
 
     private func updateImage() {
-        let (accounts, burningFast, limit, updateAvailable) = withObservationTracking {
+        let (accounts, pinned, burningFast, limit, updateAvailable) = withObservationTracking {
             let limit = container.hideFromScreenShare.isConcealing ? .iconOnly : container.dataStore.menuBarLimit
             let accounts = limit == .iconOnly ? [] : container.dataStore.accounts(in: container.layout.displayGroups)
-            return (accounts, container.dataStore.burningFast, limit, updater.availableUpdateVersion != nil)
+            return (accounts, container.layout.pinnedMetricIDs, container.dataStore.burningFast, limit, updater.availableUpdateVersion != nil)
         } onChange: { [weak self] in
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .milliseconds(50))
@@ -195,13 +195,14 @@ final class StatusItemController: NSObject {
             }
         }
         rankingTick?.cancel()
-        showStrip(accounts: accounts, burningFast: burningFast, limit: limit, updateAvailable: updateAvailable)
+        showStrip(accounts: accounts, pinned: pinned, burningFast: burningFast, limit: limit, updateAvailable: updateAvailable)
     }
 
-    private func showStrip(accounts: [DashboardAccount], burningFast: BurningFast?, limit: MenuBarLimit, updateAvailable: Bool) {
+    private func showStrip(accounts: [DashboardAccount], pinned: Set<String>, burningFast: BurningFast?, limit: MenuBarLimit, updateAvailable: Bool) {
         let now = Date()
         let board = PriorityBoard.make(accounts: accounts, burningFast: burningFast, now: now)
-        var content = MenuBarContentBuilder.build(board: board, limit: limit)
+        var content = MenuBarContentBuilder.build(accounts: accounts, pinned: pinned, limit: limit)
+            ?? MenuBarContentBuilder.build(board: board, limit: limit)
         content.updateAvailable = updateAvailable
         stripGate.show(content) { content in
             statusItem.button?.image = MenuBarStripRenderer.image(for: content)
@@ -213,7 +214,7 @@ final class StatusItemController: NSObject {
         rankingTick = Task { [weak self] in
             try? await Task.sleep(for: .seconds(30), tolerance: .seconds(1))
             guard !Task.isCancelled else { return }
-            self?.showStrip(accounts: accounts, burningFast: burningFast, limit: limit, updateAvailable: updateAvailable)
+            self?.showStrip(accounts: accounts, pinned: pinned, burningFast: burningFast, limit: limit, updateAvailable: updateAvailable)
         }
     }
 

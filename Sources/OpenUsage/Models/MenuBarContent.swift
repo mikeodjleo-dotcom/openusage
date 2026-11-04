@@ -42,6 +42,24 @@ enum MenuBarContentBuilder {
         return MenuBarContent(items: shown, overflow: board.attention.count - shown.count)
     }
 
+    /// Aix fork: as in 0.7, pinned metrics are the menu bar. They stay in place, however full they are and
+    /// however many there are, until they are unpinned. `limit` only still means App Icon Only.
+    static func build(accounts: [DashboardAccount], pinned: Set<String>, limit: MenuBarLimit) -> MenuBarContent? {
+        guard limit != .iconOnly, !pinned.isEmpty else { return nil }
+        let items = accounts.flatMap { account in
+            account.lines.filter { pinned.contains($0.id) && $0.data.hasData }.map { line in
+                MenuBarContent.Item(
+                    id: line.id,
+                    provider: account.provider,
+                    label: line.data.title,
+                    shortLabel: shortLabel(line.data.title),
+                    value: line.data.menuBarValue
+                )
+            }
+        }
+        return items.isEmpty ? nil : MenuBarContent(items: items)
+    }
+
     static func shortLabel(_ label: String) -> String {
         var words = label.split(separator: " ")
         guard words.count > 1, let last = words.last, genericWords.contains(last.lowercased()) else { return label }

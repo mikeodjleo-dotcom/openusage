@@ -24,6 +24,22 @@ final class MenuBarContentTests: XCTestCase {
         MenuBarContentBuilder.build(board: PriorityBoard.make(accounts: accounts, now: now), limit: limit)
     }
 
+    func testPinnedMetricsAreTheMenuBarInDashboardOrderWithoutACap() throws {
+        let accounts = [account(personal, limit("Session", used: 99), limit("Weekly", used: 1)),
+                        account(chatGPT, limit("Weekly", used: 5), limit("Session", used: 2))]
+        let ids = accounts.flatMap(\.lines).map(\.id)
+        let content = try XCTUnwrap(MenuBarContentBuilder.build(accounts: accounts, pinned: [ids[1], ids[2], ids[3]], limit: .upToOne))
+        XCTAssertEqual(content.items.map(\.id), [ids[1], ids[2], ids[3]], "a full unpinned limit does not push in, and the limit does not cap")
+        XCTAssertEqual(content.overflow, 0)
+    }
+
+    func testAutomaticStripWithoutPinsOrWhenIconOnly() {
+        let accounts = [account(personal, limit("Weekly", used: 99))]
+        XCTAssertNil(MenuBarContentBuilder.build(accounts: accounts, pinned: [], limit: .upToThree))
+        XCTAssertNil(MenuBarContentBuilder.build(accounts: accounts, pinned: [accounts[0].lines[0].id], limit: .iconOnly))
+        XCTAssertNil(MenuBarContentBuilder.build(accounts: accounts, pinned: ["gone"], limit: .upToThree), "a pin with no line falls back")
+    }
+
     private func sevenLimits() -> DashboardAccount {
         account(personal, limit("A", used: 99), limit("B", used: 98), limit("C", used: 97), limit("D", used: 96),
                 limit("E", used: 95), limit("F", used: 94), limit("G", used: 93))

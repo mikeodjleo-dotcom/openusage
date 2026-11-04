@@ -78,6 +78,8 @@ final class LayoutStore {
         }
     }
 
+    var pinnedMetricIDs: Set<String> { state.priorityPinIDs }
+
     func isMetricPinned(_ descriptorID: String) -> Bool {
         state.priorityPinIDs.contains(descriptorID)
     }
