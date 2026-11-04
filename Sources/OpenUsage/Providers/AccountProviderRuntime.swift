@@ -20,6 +20,7 @@ final class AccountProviderRuntime: ProviderRuntime {
     var kimiCredentialFile = KimiCredentialFile()
     var kimiUnsavedGrant: KimiGrant?
     var claudeCodeSource = ClaudeCodeSource()
+    var codexLocalSource = CodexLocalSource()
     var claudeCodeRead: Task<ClaudeCodeReading, Never>?
     var claudeKeychainNotBefore = Date.distantPast
     /// One renewal at a time: a provider that rotates refresh tokens refuses a second renewal sent with
@@ -147,6 +148,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         defer { if credentialLoad?.task == load { credentialLoad = nil } }
         guard let credential = try await load.value else { throw refusedCredential }
         if credential == .localCLI, account.kind == .claude { return try await claudeCodeCredential() }
+        if case .localCodex(let accountID) = credential { return try await codexLocalCredential(accountID: accountID) }
         return credential
     }
 
@@ -161,6 +163,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         case .apiKey: .keyRejected("\(account.kind.displayName) rejected the API key.")
         case .organizationToken: .keyRejected("GitHub rejected the token.")
         case .localCLI where account.kind == .claude: .unreachable(ClaudeCodeMessage.expired)
+        case .localCLI where account.kind == .codex: codexLocalExpired
         case .localCLI: .unavailable("\(account.kind.displayName) sign-in expired. Run kimi login in Terminal; OpenUsage picks it up on its next refresh.")
         }
     }

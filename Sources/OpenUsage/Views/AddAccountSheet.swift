@@ -19,6 +19,7 @@ struct AddAccountSheet: View {
                 case .oauth: BrowserSignInStep(flow: flow, provider: provider, cancel: { flow.isSigningInAgain ? dismiss() : flow.back() })
                 case .apiKey(let keyPage): APIKeyStep(flow: flow, provider: provider, keyPage: keyPage, cancel: { flow.back() })
                 case .organizationToken: OrganizationTokenStep(flow: flow, provider: provider, cancel: { flow.back() })
+                case .localCLI where provider == .codex: CodexLocalStep(flow: flow, cancel: { flow.back() })
                 case .localCLI: LocalCLIStep(flow: flow, provider: provider, cancel: { flow.back() })
                 }
             } else {
@@ -85,6 +86,8 @@ private struct MethodChoiceStep: View {
             title: "Add \(provider.displayName)",
             message: provider == .claude
                 ? "Sign in with your browser, or read the login Claude Code already has on this Mac."
+                : provider == .codex
+                ? "Sign in with your browser, or read a login Codex already has on this Mac."
                 : "Sign in to your own seat, or add your organization’s billing with a token."
         )
         ChoiceList(items: provider.authMethods, selection: $selection, choose: { flow.choose($0) }) { method in
@@ -96,8 +99,8 @@ private struct MethodChoiceStep: View {
     private func label(_ method: ProviderAuthMethod) -> String {
         switch method {
         case .organizationToken: "Organization Billing"
-        case .localCLI: "Use This Mac’s Claude Code Login"
-        case .oauth, .apiKey: provider == .claude ? "Sign In with Browser" : "Sign In with GitHub"
+        case .localCLI: provider == .codex ? "Use This Mac’s Codex Login" : "Use This Mac’s Claude Code Login"
+        case .oauth, .apiKey: provider == .copilot ? "Sign In with GitHub" : "Sign In with Browser"
         }
     }
 }
@@ -107,6 +110,7 @@ private struct MethodChoiceStep: View {
 private struct ChoiceList<Item: Hashable, Label: View>: View {
     let items: [Item]
     @Binding var selection: Item?
+    var rowHeight: CGFloat = 28
     let choose: (Item) -> Void
     @ViewBuilder let label: (Item) -> Label
     @FocusState private var isFocused: Bool
@@ -128,7 +132,7 @@ private struct ChoiceList<Item: Hashable, Label: View>: View {
         .scrollContentBackground(.hidden)
         .scrollDisabled(true)
         .background(Theme.cardFill, in: .rect(cornerRadius: 10))
-        .frame(height: CGFloat(items.count) * 28 + 20)
+        .frame(height: CGFloat(items.count) * rowHeight + 20)
         .padding(.horizontal, 20)
         .focused($isFocused)
         .contextMenu(forSelectionType: Item.self, menu: { _ in }, primaryAction: { items in
@@ -323,6 +327,48 @@ private struct OrganizationTokenStep: View {
         SheetButtons(
             secondary: SheetAction(title: "Cancel", shortcut: .cancelAction, action: cancel),
             primary: SheetAction(title: "Add Account", isDisabled: !flow.canAddKey) { flow.addKey() }
+        )
+        .padding(.bottom, 20)
+    }
+}
+
+private struct CodexLocalStep: View {
+    let flow: AddAccountFlow
+    let cancel: () -> Void
+    @State private var selection: CodexLocalLogin?
+
+    var body: some View {
+        SheetHeader(
+            provider: .codex,
+            title: "Add \(ProviderKind.codex.displayName)",
+            message: "Choose a login Codex has on this Mac. OpenUsage reads it and never renews or changes it."
+        )
+        if flow.codexLogins.isEmpty {
+            ErrorText("No ChatGPT login found in a ~/.codex folder. Sign in to Codex, then try again.")
+                .padding(.horizontal, 20)
+        } else {
+            ChoiceList(items: flow.codexLogins, selection: $selection, rowHeight: 44, choose: { selection = $0 }) { login in
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(login.label)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Text(CodexLocalSource().displayPath(login.home))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+        }
+        if let errorMessage = flow.errorMessage {
+            ErrorText(errorMessage)
+                .padding([.horizontal, .top], 20)
+        }
+        SheetButtons(
+            secondary: SheetAction(title: "Cancel", shortcut: .cancelAction, action: cancel),
+            primary: SheetAction(title: "Add Account", isDisabled: selection == nil) {
+                if let selection { flow.add(selection) }
+            }
         )
         .padding(.bottom, 20)
     }

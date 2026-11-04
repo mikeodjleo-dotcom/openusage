@@ -21,7 +21,8 @@ final class AddAccountSheetTests: QuietWindowTestCase {
 
         press(keyCode: 125, character: "\u{F701}", in: sheet)
         press(keyCode: 125, character: "\u{F701}", in: sheet)
-        try await waitUntil { flow.selection == .provider(.codex) }
+        press(keyCode: 125, character: "\u{F701}", in: sheet)
+        try await waitUntil { flow.selection == .provider(.cursor) }
         XCTAssertNil(flow.provider, "Moving the selection must not start sign-in")
 
         press(keyCode: 36, character: "\r", in: sheet)
@@ -35,7 +36,7 @@ final class AddAccountSheetTests: QuietWindowTestCase {
         press(keyCode: 53, character: "\u{1b}", in: sheet)
         try await waitUntil { flow.provider == nil }
         try await Task.sleep(for: .milliseconds(300))
-        XCTAssertEqual(flow.selection, .provider(.codex))
+        XCTAssertEqual(flow.selection, .provider(.cursor))
         XCTAssertNil(flow.prompt)
         XCTAssertFalse(flow.isWorking)
         XCTAssertTrue(presentation.isPresented)

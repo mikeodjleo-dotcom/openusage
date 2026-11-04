@@ -128,6 +128,7 @@ final class AddAccountFlowTests: XCTestCase {
             }
         }
         flow.choose(.codex)
+        flow.choose(.oauth)
         try await waitUntil { flow.prompt != nil }
         flow.pastedCode = "half-typed"
 

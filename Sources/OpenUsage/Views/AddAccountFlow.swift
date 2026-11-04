@@ -27,6 +27,8 @@ final class AddAccountFlow {
         didSet { if hubURL != oldValue { errorMessage = nil } }
     }
     private(set) var isConnectingHub = false
+    /// The Codex homes on this Mac, listed when the user chooses to use one.
+    private(set) var codexLogins: [CodexLocalLogin] = []
     private(set) var provider: ProviderKind?
     private(set) var method: ProviderAuthMethod?
     private(set) var prompt: LoginPrompt?
@@ -40,6 +42,7 @@ final class AddAccountFlow {
     private let connectHub: @MainActor (String, String) async throws -> Void
     private let replaceCredential: @MainActor (AccountCredential, String) async throws -> Void
     private let accountSignedInAgain: Account?
+    private let findCodexLogins: () -> [CodexLocalLogin]
     private var task: Task<Void, Never>?
     private var codeInput: AsyncStream<String>.Continuation?
 
@@ -51,7 +54,8 @@ final class AddAccountFlow {
         login: @escaping (ProviderKind, ProviderAuthMethod, String) -> any ProviderLogin = ProviderLoginCatalog.login(for:method:organization:),
         connectHub: @escaping @MainActor (String, String) async throws -> Void = { _, _ in },
         replaceCredential: @escaping @MainActor (AccountCredential, String) async throws -> Void = { _, _ in },
-        signingInAgainTo account: Account? = nil
+        signingInAgainTo account: Account? = nil,
+        findCodexLogins: @escaping () -> [CodexLocalLogin] = { CodexLocalSource().logins() }
     ) {
         self.store = store
         self.openURL = openURL
@@ -59,6 +63,7 @@ final class AddAccountFlow {
         self.connectHub = connectHub
         self.replaceCredential = replaceCredential
         accountSignedInAgain = account
+        self.findCodexLogins = findCodexLogins
         if let account {
             selection = .provider(account.kind)
             provider = account.kind
@@ -83,6 +88,7 @@ final class AddAccountFlow {
     func choose(_ method: ProviderAuthMethod) {
         self.method = method
         if method == .oauth { signIn() }
+        if method == .localCLI, provider == .codex { codexLogins = findCodexLogins() }
     }
 
     func chooseHub() {
@@ -124,6 +130,22 @@ final class AddAccountFlow {
         run(provider, method, input: input)
     }
 
+    /// Nothing to wait for: the login was just read, and each refresh reads its home again.
+    func add(_ login: CodexLocalLogin) {
+        errorMessage = nil
+        let credential = AccountCredential.localCodex(accountID: login.accountID)
+        do {
+            try store.checkForDuplicate(credential, kind: .codex, organization: nil)
+        } catch {
+            return fail(error.localizedDescription)
+        }
+        let account = store.add(kind: .codex, label: login.label, localCLIHome: login.home, credential: credential)
+        guard store.accounts.contains(where: { $0.id == account.id }) else {
+            return fail(store.lastError ?? "The account could not be saved.")
+        }
+        finish()
+    }
+
     func openBrowser() {
         switch prompt {
         case .browser(let url, _), .browserToken(let url): openURL(url)
@@ -151,6 +173,7 @@ final class AddAccountFlow {
         cancel()
         provider = nil
         isConnectingHub = false
+        codexLogins = []
         hubURL = ""
         method = nil
         prompt = nil

@@ -72,7 +72,8 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
     var authMethods: [ProviderAuthMethod] {
         switch self {
         case .claude: [.oauth, .localCLI]
-        case .codex, .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
+        case .codex: [.oauth, .localCLI]
+        case .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
         case .copilot: [.oauth, .organizationToken]
         case .kimi: [.localCLI]
         case .ollama: [.apiKey(keyPage: URL(string: "https://ollama.com/settings/keys")!)]
@@ -95,6 +96,8 @@ struct Account: Codable, Identifiable, Hashable, Sendable {
     var hub: HubLink?
     /// True for an account that reads its provider's CLI sign-in; absent on every other account.
     let usesLocalCLI: Bool?
+    /// The Codex home a local ChatGPT account reads; absent on every other account.
+    let localCLIHome: String?
     let addedAt: Date
 
     var authMethod: ProviderAuthMethod {
@@ -108,7 +111,7 @@ struct Account: Codable, Identifiable, Hashable, Sendable {
 
     init(
         id: UUID = UUID(), kind: ProviderKind, label: String, organization: String? = nil, hub: HubLink? = nil,
-        usesLocalCLI: Bool = false, addedAt: Date = Date()
+        usesLocalCLI: Bool = false, localCLIHome: String? = nil, addedAt: Date = Date()
     ) {
         self.id = id
         self.kind = kind
@@ -116,6 +119,7 @@ struct Account: Codable, Identifiable, Hashable, Sendable {
         self.organization = organization
         self.hub = hub
         self.usesLocalCLI = usesLocalCLI ? true : nil
+        self.localCLIHome = localCLIHome
         self.addedAt = addedAt
     }
 }
@@ -141,6 +145,9 @@ enum AccountCredential: Codable, Sendable, Equatable {
     case apiKey(String)
     /// A marker: the sign-in itself stays with the provider's CLI. One Mac has one such sign-in per provider.
     case localCLI
+    /// A marker for a Codex home's sign-in, which the account's `localCLIHome` names. The account id tells
+    /// two logins apart; no token is kept.
+    case localCodex(accountID: String)
 
     var identity: String? {
         switch self {
@@ -150,6 +157,8 @@ enum AccountCredential: Codable, Sendable, Equatable {
             "key:" + SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
         case .localCLI:
             "local-cli"
+        case .localCodex(let accountID):
+            "codex:\(accountID)"
         }
     }
 }

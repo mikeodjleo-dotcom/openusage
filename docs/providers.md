@@ -13,7 +13,7 @@ How each provider signs in and what its card shows.
 | Provider | Sign-in | Card shows |
 |---|---|---|
 | Claude | Browser (claude.ai OAuth), or Claude Code's login on this Mac | Session, Weekly, Sonnet, Fable, Extra Usage, Rate Limit Resets |
-| ChatGPT | Browser (OpenAI OAuth), with a device-code fallback | Session, Weekly, Spark, Spark Weekly, Extra Usage, Credit Limit, Rate Limit Resets, Today, Yesterday, Last 30 Days |
+| ChatGPT | Browser (OpenAI OAuth), with a device-code fallback, or Codex's login on this Mac | Session, Weekly, Spark, Spark Weekly, Extra Usage, Credit Limit, Rate Limit Resets, Today, Yesterday, Last 30 Days |
 | Cursor | Browser (cursor.com) | Total Usage, Cursor Models, Other Models, Extra Usage, Grok Bot, Requests, Credits, Today, Yesterday, Last 30 Days |
 | Antigravity | Browser (Google OAuth) | Gemini 5h, Gemini, Argon, Claude 5h, Claude |
 | Copilot | Device code (GitHub) | Credits, Extra Usage, Chat, Completions |
@@ -72,6 +72,11 @@ resets popover says so, and you can spend the reset in Claude Code instead.
 
 - Sign in through OpenAI in your browser. If the app cannot listen on port 1455, it offers a device
   code instead.
+- Or choose **Use This Mac's Codex Login** and pick from the ChatGPT logins in `~/.codex*` and
+  `~/.config/codex`, shown by email and folder. API-key folders aren't listed. The account records only
+  the folder, and OpenUsage reads its `auth.json` on every refresh and keeps no copy. It never renews or
+  writes that token, which Codex rotates itself: when it has expired the card says so and recovers on the
+  next refresh after Codex runs. Each ChatGPT account id can be added once this way.
 - The command line calls this provider `codex`.
 - Extra Usage shows your credits in dollars, at 4¢ a credit, even at `$0`. It hides while ChatGPT
   reports credits off.
@@ -143,7 +148,7 @@ beyond the included pool).
 
 - Run `kimi login` first. Adding the account asks for nothing: it reads the Kimi Code CLI's sign-in from
   `~/.kimi-code/credentials/kimi-code.json`. Kimi offers no sign-in of its own to third parties, so
-  this reads another tool's credential, as Claude's local login does.
+  this reads another tool's credential, as the local logins of Claude and ChatGPT do.
 - The CLI and OpenUsage share one session whose refresh token rotates on every refresh, so OpenUsage takes
   the CLI's lock, writes the rotated tokens back to that file, and keeps no copy. Two Macs need a
   `kimi login` each: a copied file stops working at the next refresh on either.
