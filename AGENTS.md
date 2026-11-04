@@ -1,7 +1,7 @@
 # AGENTS.md
 
 OpenUsage is a SwiftPM-based macOS menu-bar app that shows the usage limits of the AI coding accounts a
-user adds within the app (Claude, Codex, Cursor, Copilot, Antigravity, Devin, Grok, Muse Code, Ollama,
+user adds within the app (Claude, Codex, Cursor, Copilot, Antigravity, Devin, Grok, Kimi, Muse Code, Ollama,
 OpenCode, OpenRouter, Z.ai).
 
 This file documents the engineering conventions for the project. Read it before contributing.
@@ -43,7 +43,8 @@ on `gh-pages`). Cut releases with the release-swift skill.
   Keychain service.
 - Users initiate all provider sign-ins from the popover's Accounts screen. Never discover credentials
   or accounts from other tools, and never read their files, Keychain items, SQLite databases, or
-  environment variables.
+  environment variables. The one exception is Kimi, which reads the Kimi Code CLI's sign-in file by the
+  owner's decision (see `KimiCredentialFile`).
 - Each account has one provider runtime. The runtime calls the provider API and maps its response to
   dashboard metrics. Do not add log scanning, spend estimates, or external pricing; the one exception
   is ChatGPT's credits, priced at 4¢ each in `CodexUsageMapper`.

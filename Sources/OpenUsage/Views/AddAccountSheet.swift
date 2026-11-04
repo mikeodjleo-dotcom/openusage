@@ -19,6 +19,7 @@ struct AddAccountSheet: View {
                 case .oauth: BrowserSignInStep(flow: flow, provider: provider, cancel: { flow.isSigningInAgain ? dismiss() : flow.back() })
                 case .apiKey(let keyPage): APIKeyStep(flow: flow, provider: provider, keyPage: keyPage, cancel: { flow.back() })
                 case .organizationToken: OrganizationTokenStep(flow: flow, provider: provider, cancel: { flow.back() })
+                case .localCLI: LocalCLIStep(flow: flow, provider: provider, cancel: { flow.back() })
                 }
             } else {
                 ProviderChoiceStep(flow: flow, cancel: { dismiss() })
@@ -312,6 +313,36 @@ private struct OrganizationTokenStep: View {
         SheetButtons(
             secondary: SheetAction(title: "Cancel", shortcut: .cancelAction, action: cancel),
             primary: SheetAction(title: "Add Account", isDisabled: !flow.canAddKey) { flow.addKey() }
+        )
+        .padding(.bottom, 20)
+    }
+}
+
+private struct LocalCLIStep: View {
+    @Bindable var flow: AddAccountFlow
+    let provider: ProviderKind
+    let cancel: () -> Void
+
+    var body: some View {
+        SheetHeader(
+            provider: provider,
+            title: "Add \(provider.displayName)",
+            message: "OpenUsage reads and renews the sign-in the Kimi Code CLI keeps in ~/.kimi-code. Run kimi login first if you haven’t."
+        )
+        Form {
+            Section {
+                TextField("Name", text: $flow.accountName, prompt: Text(provider.displayName))
+                    .onSubmit { flow.signIn() }
+            } footer: {
+                if let errorMessage = flow.errorMessage {
+                    ErrorText(errorMessage)
+                }
+            }
+        }
+        .inlineGroupedForm()
+        SheetButtons(
+            secondary: SheetAction(title: "Cancel", shortcut: .cancelAction, action: cancel),
+            primary: SheetAction(title: "Add Account", isDisabled: flow.isWorking) { flow.signIn() }
         )
         .padding(.bottom, 20)
     }

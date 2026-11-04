@@ -5,6 +5,8 @@ enum ProviderAuthMethod: Sendable, Hashable {
     case oauth
     case apiKey(keyPage: URL)
     case organizationToken
+    /// The sign-in the provider's own CLI keeps on this Mac: nothing to paste and no browser.
+    case localCLI
 }
 
 enum ProviderKind: String, Codable, CaseIterable, Sendable {
@@ -15,6 +17,7 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
     case copilot
     case devin
     case grok
+    case kimi
     case muse
     case ollama
     case opencodeGo = "opencode"
@@ -30,6 +33,7 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
         case .copilot: "Copilot"
         case .devin: "Devin"
         case .grok: "Grok"
+        case .kimi: "Kimi"
         case .muse: "Muse Code"
         case .ollama: "Ollama"
         case .opencodeGo: "OpenCode"
@@ -51,6 +55,7 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
                         .init(label: "Usage Dashboard", url: URL(string: "https://github.com/settings/billing")!)]
         case .devin: [.init(label: "Usage Dashboard", url: URL(string: "https://app.devin.ai/settings/plans")!)]
         case .grok: [.init(label: "Usage Dashboard", url: URL(string: "https://grok.com/?_s=usage")!)]
+        case .kimi: [.init(label: "Usage Dashboard", url: URL(string: "https://www.kimi.com/code/console")!)]
         case .muse: [.init(label: "Usage Dashboard", url: URL(string: "https://dev.meta.ai/usage")!)]
         case .ollama: [.init(label: "Usage Dashboard", url: URL(string: "https://ollama.com/settings")!),
                        .init(label: "API Keys", url: URL(string: "https://ollama.com/settings/keys")!)]
@@ -68,6 +73,7 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
         switch self {
         case .claude, .codex, .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
         case .copilot: [.oauth, .organizationToken]
+        case .kimi: [.localCLI]
         case .ollama: [.apiKey(keyPage: URL(string: "https://ollama.com/settings/keys")!)]
         case .opencodeGo: [.apiKey(keyPage: URL(string: "https://opencode.ai/console")!)]
         case .openrouter: [.apiKey(keyPage: URL(string: "https://openrouter.ai/settings/management-keys")!)]
@@ -127,6 +133,8 @@ struct OAuthTokens: Codable, Sendable, Equatable {
 enum AccountCredential: Codable, Sendable, Equatable {
     case oauth(OAuthTokens)
     case apiKey(String)
+    /// A marker: the sign-in itself stays in the provider's CLI's file. One Mac has one such sign-in.
+    case localCLI
 
     var identity: String? {
         switch self {
@@ -134,6 +142,8 @@ enum AccountCredential: Codable, Sendable, Equatable {
             tokens.extras[OAuthTokens.identityKey]
         case .apiKey(let key):
             "key:" + SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        case .localCLI:
+            "local-cli"
         }
     }
 }

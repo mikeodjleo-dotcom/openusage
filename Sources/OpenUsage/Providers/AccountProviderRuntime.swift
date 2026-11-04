@@ -17,6 +17,8 @@ final class AccountProviderRuntime: ProviderRuntime {
     var claude: ClaudeAccountState
     var codexMatchedCreditIDs: [String: String] = [:]
     var museLastKnown: [MetricLine] = []
+    var kimiCredentialFile = KimiCredentialFile()
+    var kimiUnsavedGrant: KimiGrant?
     /// One renewal at a time: a provider that rotates refresh tokens refuses a second renewal sent with
     /// the same one, so a caller that needs a renewal while one is in flight waits for its tokens, and a
     /// caller whose tokens another renewal already replaced takes the stored ones.
@@ -107,7 +109,7 @@ final class AccountProviderRuntime: ProviderRuntime {
                 windowResets: unexpiredZAIResets ?? [],
                 claimWindowReset: { [self] reset, requestID in await claimZAIReset(reset, requestID: requestID) }
             )
-        case .cursor, .antigravity, .copilot, .devin, .grok, .muse, .ollama, .opencodeGo, .openrouter:
+        case .cursor, .antigravity, .copilot, .devin, .grok, .kimi, .muse, .ollama, .opencodeGo, .openrouter:
             return nil
         }
     }
@@ -116,7 +118,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         switch account.kind {
         case .claude: restoreClaude(snapshot)
         case .muse: museLastKnown = snapshot.lines
-        case .codex, .cursor, .antigravity, .copilot, .devin, .grok, .ollama, .opencodeGo, .openrouter, .zai: break
+        case .codex, .cursor, .antigravity, .copilot, .devin, .grok, .kimi, .ollama, .opencodeGo, .openrouter, .zai: break
         }
     }
 
@@ -154,6 +156,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         case .oauth: .signInExpired(account.kind)
         case .apiKey: .keyRejected("\(account.kind.displayName) rejected the API key.")
         case .organizationToken: .keyRejected("GitHub rejected the token.")
+        case .localCLI: .unavailable("\(account.kind.displayName) sign-in expired. Run kimi login in Terminal; OpenUsage picks it up on its next refresh.")
         }
     }
 
@@ -167,6 +170,7 @@ final class AccountProviderRuntime: ProviderRuntime {
             case .copilot: try await refreshCopilot(credential)
             case .devin: try await refreshDevin(credential)
             case .grok: try await refreshGrok(credential)
+            case .kimi: try await refreshKimi()
             case .muse: try await refreshMuse(credential)
             case .ollama: try await refreshOllama(credential)
             case .opencodeGo: try await refreshOpenCode(credential)

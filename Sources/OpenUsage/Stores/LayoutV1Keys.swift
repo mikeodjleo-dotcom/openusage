@@ -52,6 +52,7 @@ extension LayoutV1Keys {
         .copilot: ["premium", "extra", "orgCredits", "orgSpend", "chat", "completions"],
         .devin: ["daily", "weekly", "extra"],
         .grok: ["weekly", "payAsYouGo", "trend", "today", "yesterday", "last30"],
+        .kimi: ["session", "weekly"],
         .ollama: ["session", "weekly", "monthly", "purchasedCredits"],
         .opencodeGo: ["session", "weekly", "monthly", "trend", "today", "yesterday", "last30"],
         .openrouter: ["credits", "balance", "today", "week", "month", "keyLimit"],

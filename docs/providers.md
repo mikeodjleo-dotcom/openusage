@@ -20,6 +20,7 @@ How each provider signs in and what its card shows.
 | Copilot organization | Organization and token | Org Credits, Org Spend |
 | Devin | Browser (Windsurf), then a pasted token | Daily, Weekly, Extra Usage |
 | Grok | Device code (xAI) | Weekly, Extra Usage |
+| Kimi | The Kimi Code CLI's sign-in on this Mac | Allegro · 5-Hour Code, Allegro · 7-Day Code |
 | Muse Code | Device code (Meta) | Session, Weekly |
 | Ollama | API key | Session, Weekly, Monthly, Extra Usage, Today, Yesterday, Last 30 Days, Requests |
 | OpenCode | API key | Session, Weekly, Monthly |
@@ -132,6 +133,18 @@ beyond the included pool).
 - Weekly is the shared pool. Extra Usage shows the pay-as-you-go cap and hides when there is no cap
   or a $0 one.
 - A team account has no personal quota. Its card shows the plan and says so.
+
+## Kimi
+
+- Run `kimi login` first. Adding the account asks for nothing: it reads the Kimi Code CLI's sign-in from
+  `~/.kimi-code/credentials/kimi-code.json`. This is the one provider that reads another tool's
+  credential, because Kimi offers no sign-in of its own to third parties.
+- The CLI and OpenUsage share one session whose refresh token rotates on every refresh, so OpenUsage takes
+  the CLI's lock, writes the rotated tokens back to that file, and keeps no copy. Two Macs need a
+  `kimi login` each: a copied file stops working at the next refresh on either.
+- The card shows the official subscription's 5-hour and 7-day quota with their reset times, always titled
+  **Allegro**, the plan name, since the usage API no longer reports it.
+- When the sign-in is gone the card says to run `kimi login`, and picks the new one up on its next refresh.
 
 ## Muse Code
 
