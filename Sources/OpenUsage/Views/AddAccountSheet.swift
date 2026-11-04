@@ -83,12 +83,22 @@ private struct MethodChoiceStep: View {
         SheetHeader(
             provider: provider,
             title: "Add \(provider.displayName)",
-            message: "Sign in to your own seat, or add your organization’s billing with a token."
+            message: provider == .claude
+                ? "Sign in with your browser, or read the login Claude Code already has on this Mac."
+                : "Sign in to your own seat, or add your organization’s billing with a token."
         )
         ChoiceList(items: provider.authMethods, selection: $selection, choose: { flow.choose($0) }) { method in
-            Text(method == .organizationToken ? "Organization Billing" : "Sign In with GitHub")
+            Text(label(method))
         }
         CancelRow(cancel: cancel)
+    }
+
+    private func label(_ method: ProviderAuthMethod) -> String {
+        switch method {
+        case .organizationToken: "Organization Billing"
+        case .localCLI: "Use This Mac’s Claude Code Login"
+        case .oauth, .apiKey: provider == .claude ? "Sign In with Browser" : "Sign In with GitHub"
+        }
     }
 }
 
@@ -327,7 +337,9 @@ private struct LocalCLIStep: View {
         SheetHeader(
             provider: provider,
             title: "Add \(provider.displayName)",
-            message: "OpenUsage reads and renews the sign-in the Kimi Code CLI keeps in ~/.kimi-code. Run kimi login first if you haven’t."
+            message: provider == .claude
+                ? "OpenUsage reads Claude Code’s login on this Mac and never renews or changes it. macOS may ask for Keychain access: choose Always Allow."
+                : "OpenUsage reads and renews the sign-in the Kimi Code CLI keeps in ~/.kimi-code. Run kimi login first if you haven’t."
         )
         Form {
             Section {

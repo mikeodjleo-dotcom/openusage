@@ -12,7 +12,7 @@ How each provider signs in and what its card shows.
 
 | Provider | Sign-in | Card shows |
 |---|---|---|
-| Claude | Browser (claude.ai OAuth) | Session, Weekly, Sonnet, Fable, Extra Usage, Rate Limit Resets |
+| Claude | Browser (claude.ai OAuth), or Claude Code's login on this Mac | Session, Weekly, Sonnet, Fable, Extra Usage, Rate Limit Resets |
 | ChatGPT | Browser (OpenAI OAuth), with a device-code fallback | Session, Weekly, Spark, Spark Weekly, Extra Usage, Credit Limit, Rate Limit Resets, Today, Yesterday, Last 30 Days |
 | Cursor | Browser (cursor.com) | Total Usage, Cursor Models, Other Models, Extra Usage, Grok Bot, Requests, Credits, Today, Yesterday, Last 30 Days |
 | Antigravity | Browser (Google OAuth) | Gemini 5h, Gemini, Argon, Claude 5h, Claude |
@@ -55,6 +55,11 @@ resets popover says so, and you can spend the reset in Claude Code instead.
 
 - Sign in through claude.ai in your browser. If the browser shows a code instead of returning to the
   app, paste it into the sheet.
+- Or choose **Use This Mac's Claude Code Login**: OpenUsage reads Claude Code's sign-in from the Keychain
+  item `Claude Code-credentials`, then `~/.claude/.credentials.json`, on every refresh and keeps no copy.
+  It never renews or writes that token, which Claude Code rotates itself. When the token has expired the
+  card says so and recovers on the next refresh after Claude Code runs. If the Keychain refuses, it says
+  so and doesn't ask again for an hour; choose **Always Allow** when asked.
 - The card reads the plan (Pro, Max, or Ultra) once an hour. Ultra has no 5-hour limit, so it has no
   Session row.
 - Extra Usage shows spend against the monthly limit, or the amount spent when there is no limit, in
@@ -137,8 +142,8 @@ beyond the included pool).
 ## Kimi
 
 - Run `kimi login` first. Adding the account asks for nothing: it reads the Kimi Code CLI's sign-in from
-  `~/.kimi-code/credentials/kimi-code.json`. This is the one provider that reads another tool's
-  credential, because Kimi offers no sign-in of its own to third parties.
+  `~/.kimi-code/credentials/kimi-code.json`. Kimi offers no sign-in of its own to third parties, so
+  this reads another tool's credential, as Claude's local login does.
 - The CLI and OpenUsage share one session whose refresh token rotates on every refresh, so OpenUsage takes
   the CLI's lock, writes the rotated tokens back to that file, and keeps no copy. Two Macs need a
   `kimi login` each: a copied file stops working at the next refresh on either.

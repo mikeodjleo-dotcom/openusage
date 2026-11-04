@@ -71,7 +71,8 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
 
     var authMethods: [ProviderAuthMethod] {
         switch self {
-        case .claude, .codex, .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
+        case .claude: [.oauth, .localCLI]
+        case .codex, .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
         case .copilot: [.oauth, .organizationToken]
         case .kimi: [.localCLI]
         case .ollama: [.apiKey(keyPage: URL(string: "https://ollama.com/settings/keys")!)]
@@ -92,10 +93,13 @@ struct Account: Codable, Identifiable, Hashable, Sendable {
     /// An account mirrored from a CLIProxyAPI hub carries where its login lives there; every other
     /// account has none.
     var hub: HubLink?
+    /// True for an account that reads its provider's CLI sign-in; absent on every other account.
+    let usesLocalCLI: Bool?
     let addedAt: Date
 
     var authMethod: ProviderAuthMethod {
-        organization != nil ? .organizationToken : kind.authMethods[0]
+        if organization != nil { return .organizationToken }
+        return usesLocalCLI == true ? .localCLI : kind.authMethods[0]
     }
 
     var cardID: String {
@@ -103,13 +107,15 @@ struct Account: Codable, Identifiable, Hashable, Sendable {
     }
 
     init(
-        id: UUID = UUID(), kind: ProviderKind, label: String, organization: String? = nil, hub: HubLink? = nil, addedAt: Date = Date()
+        id: UUID = UUID(), kind: ProviderKind, label: String, organization: String? = nil, hub: HubLink? = nil,
+        usesLocalCLI: Bool = false, addedAt: Date = Date()
     ) {
         self.id = id
         self.kind = kind
         self.label = label
         self.organization = organization
         self.hub = hub
+        self.usesLocalCLI = usesLocalCLI ? true : nil
         self.addedAt = addedAt
     }
 }
@@ -133,7 +139,7 @@ struct OAuthTokens: Codable, Sendable, Equatable {
 enum AccountCredential: Codable, Sendable, Equatable {
     case oauth(OAuthTokens)
     case apiKey(String)
-    /// A marker: the sign-in itself stays in the provider's CLI's file. One Mac has one such sign-in.
+    /// A marker: the sign-in itself stays with the provider's CLI. One Mac has one such sign-in per provider.
     case localCLI
 
     var identity: String? {

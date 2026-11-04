@@ -4,7 +4,8 @@ extension AccountProviderRuntime {
     /// The stored credential is only a marker: the CLI's file is read on every refresh, so a `kimi login`
     /// or a refresh the CLI made is picked up at once. A token with a minute left is still the CLI's to
     /// renew, which it does well before that when it is running.
-    func refreshKimi() async throws -> ProviderUsage {
+    func refreshKimi(_ marker: AccountCredential) async throws -> ProviderUsage {
+        guard marker == .localCLI else { throw ProviderError.invalidResponse }
         let client = KimiUsageClient(http: http)
         let deviceID = try await loadOffMainActor { [kimiCredentialFile] in kimiCredentialFile.deviceID() }
         let credential = try await currentKimiCredential()

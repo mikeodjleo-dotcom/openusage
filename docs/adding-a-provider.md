@@ -1,8 +1,8 @@
 # Adding a provider
 
 A provider is a `ProviderKind` case, a sign-in, a usage client, and a mapper. Every value it shows
-must come from the provider's API. Never read another tool's credentials, files, or logs (Kimi is the
-one exception, by the owner's decision), and never compute spend from logs or pricing.
+must come from the provider's API. Never read another tool's credentials, files, or logs (Kimi and
+Claude's local login are the exceptions, by the owner's decision), and never compute spend from logs or pricing.
 
 ## 1. Declare the kind
 

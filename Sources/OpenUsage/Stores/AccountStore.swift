@@ -82,7 +82,7 @@ final class AccountStore {
 
     @discardableResult
     func add(kind: ProviderKind, label: String, organization: String? = nil, credential: AccountCredential) -> Account {
-        let account = newAccount(kind: kind, label: label, organization: organization)
+        let account = newAccount(kind: kind, label: label, organization: organization, usesLocalCLI: credential == .localCLI)
         do {
             try credentialVault.save(credential, for: account.id)
             accounts.append(account)
@@ -238,9 +238,9 @@ final class AccountStore {
 
     /// A card id keeps only the first 8 hex digits of the account's id, and two cards with one id crash
     /// the dashboard, so an id whose card id is taken is drawn again.
-    private func newAccount(kind: ProviderKind, label: String, organization: String? = nil, hub: HubLink? = nil) -> Account {
+    private func newAccount(kind: ProviderKind, label: String, organization: String? = nil, hub: HubLink? = nil, usesLocalCLI: Bool = false) -> Account {
         while true {
-            let account = Account(id: makeID(), kind: kind, label: Self.name(label, for: kind), organization: organization, hub: hub)
+            let account = Account(id: makeID(), kind: kind, label: Self.name(label, for: kind), organization: organization, hub: hub, usesLocalCLI: usesLocalCLI)
             if self.account(cardID: account.cardID) == nil { return account }
         }
     }

@@ -57,6 +57,7 @@ final class AddAccountSheetTests: QuietWindowTestCase {
             let flow = AddAccountFlow(store: store, openURL: { _ in }) { _, _, _ in SlowLogin(prompt: prompt) }
             addTeardownBlock { flow.cancel() }
             flow.choose(provider)
+            if provider == .claude { flow.choose(.oauth) }
             try await waitUntil { flow.prompt != nil }
             flow.pastedCode = "pasted-secret"
             let host = show(AddAccountSheet(flow: flow), in: .titled).host
