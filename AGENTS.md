@@ -44,9 +44,10 @@ on `gh-pages`). Cut releases with the release-swift skill.
 - Users initiate all provider sign-ins from the popover's Accounts screen. Never discover credentials
   or accounts from other tools, and never read their files, Keychain items, SQLite databases, or
   environment variables. The exceptions, by the owner's decision, are Kimi, which reads and renews the Kimi
-  Code CLI's sign-in file (`KimiCredentialFile`), and the optional local logins of Claude and ChatGPT,
-  which only read Claude Code's and Codex's sign-ins and never renew them (`ClaudeCodeSource`,
-  `CodexLocalSource`).
+  Code CLI's sign-in file (`KimiCredentialFile`), and the optional local logins of Claude, ChatGPT, and
+  Antigravity, which never write to those tools' stores: Claude Code's and Codex's sign-ins are only read
+  (`ClaudeCodeSource`, `CodexLocalSource`), and Antigravity's access token is renewed in memory only
+  (`AntigravityLocalSource`).
 - Each account has one provider runtime. The runtime calls the provider API and maps its response to
   dashboard metrics. Do not add log scanning, spend estimates, or external pricing; the one exception
   is ChatGPT's credits, priced at 4¢ each in `CodexUsageMapper`.

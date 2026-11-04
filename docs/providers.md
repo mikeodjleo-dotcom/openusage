@@ -15,7 +15,7 @@ How each provider signs in and what its card shows.
 | Claude | Browser (claude.ai OAuth), or Claude Code's login on this Mac | Session, Weekly, Sonnet, Fable, Extra Usage, Rate Limit Resets |
 | ChatGPT | Browser (OpenAI OAuth), with a device-code fallback, or Codex's login on this Mac | Session, Weekly, Spark, Spark Weekly, Extra Usage, Credit Limit, Rate Limit Resets, Today, Yesterday, Last 30 Days |
 | Cursor | Browser (cursor.com) | Total Usage, Cursor Models, Other Models, Extra Usage, Grok Bot, Requests, Credits, Today, Yesterday, Last 30 Days |
-| Antigravity | Browser (Google OAuth) | Gemini 5h, Gemini, Argon, Claude 5h, Claude |
+| Antigravity | Browser (Google OAuth), or Antigravity's login on this Mac | Gemini 5h, Gemini, Argon, Claude 5h, Claude |
 | Copilot | Device code (GitHub) | Credits, Extra Usage, Chat, Completions |
 | Copilot organization | Organization and token | Org Credits, Org Spend |
 | Devin | Browser (Windsurf), then a pasted token | Daily, Weekly, Extra Usage |
@@ -114,6 +114,12 @@ How the history is read:
 ## Antigravity
 
 - Sign in with Google in your browser.
+- Or choose **Use This Mac's Antigravity Login**: OpenUsage reads the Keychain item `gemini` / `antigravity`,
+  or `~/.gemini/antigravity-cli/antigravity-oauth-token` when that token expires later, on every refresh.
+  The account is named by the email in that login. The access token lasts about an hour and `agy` only renews
+  it while running, so OpenUsage renews it from the refresh token, which Google doesn't rotate, and keeps the
+  result in memory. It writes nothing back to either store. If the Keychain refuses, it says so and doesn't
+  ask again for an hour; choose **Always Allow** when asked.
 - The card shows the Gemini and Claude pools (5-hour and weekly) and the Argon weekly window.
 - If the project has no quota subscription, the card explains the access issue. If the project
   lookup failed, refresh again.
@@ -148,7 +154,7 @@ beyond the included pool).
 
 - Run `kimi login` first. Adding the account asks for nothing: it reads the Kimi Code CLI's sign-in from
   `~/.kimi-code/credentials/kimi-code.json`. Kimi offers no sign-in of its own to third parties, so
-  this reads another tool's credential, as the local logins of Claude and ChatGPT do.
+  this reads another tool's credential, as the local logins of Claude, ChatGPT, and Antigravity do.
 - The CLI and OpenUsage share one session whose refresh token rotates on every refresh, so OpenUsage takes
   the CLI's lock, writes the rotated tokens back to that file, and keeps no copy. Two Macs need a
   `kimi login` each: a copied file stops working at the next refresh on either.

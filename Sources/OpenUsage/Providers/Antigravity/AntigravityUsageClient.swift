@@ -2,6 +2,11 @@ import Foundation
 
 extension AntigravityLogin {
     static func refresh(_ refreshToken: String, http: any HTTPClient, now: Date) async throws -> OAuthGrant {
+        let token = try await renewal(refreshToken, http: http)
+        return OAuthGrant(accessToken: token.accessToken, expiresAt: now.addingTimeInterval(token.expiresIn ?? 3600))
+    }
+
+    static func renewal(_ refreshToken: String, http: any HTTPClient) async throws -> OAuthTokenResponse {
         let form = [
             "client_id=\(clientID.urlFormEncoded)",
             "client_secret=\(clientSecret.urlFormEncoded)",
@@ -15,8 +20,7 @@ extension AntigravityLogin {
             body: Data(form.utf8),
             timeout: 15
         )
-        let token = try await OAuthTokenResponse(renewal: http.send(request), kind: .antigravity)
-        return OAuthGrant(accessToken: token.accessToken, expiresAt: now.addingTimeInterval(token.expiresIn ?? 3600))
+        return try await OAuthTokenResponse(renewal: http.send(request), kind: .antigravity)
     }
 }
 

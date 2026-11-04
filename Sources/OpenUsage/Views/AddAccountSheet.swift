@@ -88,6 +88,8 @@ private struct MethodChoiceStep: View {
                 ? "Sign in with your browser, or read the login Claude Code already has on this Mac."
                 : provider == .codex
                 ? "Sign in with your browser, or read a login Codex already has on this Mac."
+                : provider == .antigravity
+                ? "Sign in with your browser, or read the login Antigravity already has on this Mac."
                 : "Sign in to your own seat, or add your organization’s billing with a token."
         )
         ChoiceList(items: provider.authMethods, selection: $selection, choose: { flow.choose($0) }) { method in
@@ -99,7 +101,12 @@ private struct MethodChoiceStep: View {
     private func label(_ method: ProviderAuthMethod) -> String {
         switch method {
         case .organizationToken: "Organization Billing"
-        case .localCLI: provider == .codex ? "Use This Mac’s Codex Login" : "Use This Mac’s Claude Code Login"
+        case .localCLI:
+            switch provider {
+            case .codex: "Use This Mac’s Codex Login"
+            case .antigravity: "Use This Mac’s Antigravity Login"
+            default: "Use This Mac’s Claude Code Login"
+            }
         case .oauth, .apiKey: provider == .copilot ? "Sign In with GitHub" : "Sign In with Browser"
         }
     }
@@ -385,6 +392,8 @@ private struct LocalCLIStep: View {
             title: "Add \(provider.displayName)",
             message: provider == .claude
                 ? "OpenUsage reads Claude Code’s login on this Mac and never renews or changes it. macOS may ask for Keychain access: choose Always Allow."
+                : provider == .antigravity
+                ? "OpenUsage reads Antigravity’s login on this Mac and never changes it; it renews the access token in memory only. macOS may ask for Keychain access: choose Always Allow."
                 : "OpenUsage reads and renews the sign-in the Kimi Code CLI keeps in ~/.kimi-code. Run kimi login first if you haven’t."
         )
         Form {

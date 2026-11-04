@@ -73,7 +73,8 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
         switch self {
         case .claude: [.oauth, .localCLI]
         case .codex: [.oauth, .localCLI]
-        case .cursor, .antigravity, .devin, .grok, .muse: [.oauth]
+        case .antigravity: [.oauth, .localCLI]
+        case .cursor, .devin, .grok, .muse: [.oauth]
         case .copilot: [.oauth, .organizationToken]
         case .kimi: [.localCLI]
         case .ollama: [.apiKey(keyPage: URL(string: "https://ollama.com/settings/keys")!)]

@@ -184,6 +184,7 @@ enum ProviderLoginCatalog {
     static func login(for kind: ProviderKind, method: ProviderAuthMethod, organization: String) -> any ProviderLogin {
         if method == .organizationToken { return CopilotOrganizationLogin(organization: organization) }
         if method == .localCLI, kind == .claude { return ClaudeCodeLogin() }
+        if method == .localCLI, kind == .antigravity { return AntigravityLocalLogin() }
         return switch kind {
         case .claude: ClaudeLogin()
         case .codex: CodexLogin()

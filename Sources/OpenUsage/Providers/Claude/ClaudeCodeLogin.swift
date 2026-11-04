@@ -68,7 +68,7 @@ enum SecurityCommand {
     }
 
     /// The timeout ends the command and with it any prompt nobody answers. The output is never logged.
-    private static func read(_ arguments: [String], timeout: TimeInterval) throws -> String? {
+    static func read(_ arguments: [String], timeout: TimeInterval) throws -> String? {
         nonisolated(unsafe) let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/security")
         process.arguments = arguments

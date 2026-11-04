@@ -21,6 +21,10 @@ final class AccountProviderRuntime: ProviderRuntime {
     var kimiUnsavedGrant: KimiGrant?
     var claudeCodeSource = ClaudeCodeSource()
     var codexLocalSource = CodexLocalSource()
+    var antigravityLocalSource = AntigravityLocalSource()
+    var antigravityKeychainNotBefore = Date.distantPast
+    var antigravityLocalRefreshToken: String?
+    var antigravityRenewal: (refreshToken: String, accessToken: String, expiresAt: Date)?
     var claudeCodeRead: Task<ClaudeCodeReading, Never>?
     var claudeKeychainNotBefore = Date.distantPast
     /// One renewal at a time: a provider that rotates refresh tokens refuses a second renewal sent with
@@ -148,6 +152,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         defer { if credentialLoad?.task == load { credentialLoad = nil } }
         guard let credential = try await load.value else { throw refusedCredential }
         if credential == .localCLI, account.kind == .claude { return try await claudeCodeCredential() }
+        if credential == .localCLI, account.kind == .antigravity { return try await antigravityLocalCredential() }
         if case .localCodex(let accountID) = credential { return try await codexLocalCredential(accountID: accountID) }
         return credential
     }
@@ -164,6 +169,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         case .organizationToken: .keyRejected("GitHub rejected the token.")
         case .localCLI where account.kind == .claude: .unreachable(ClaudeCodeMessage.expired)
         case .localCLI where account.kind == .codex: codexLocalExpired
+        case .localCLI where account.kind == .antigravity: .unreachable(AntigravityLocalMessage.expired)
         case .localCLI: .unavailable("\(account.kind.displayName) sign-in expired. Run kimi login in Terminal; OpenUsage picks it up on its next refresh.")
         }
     }
@@ -328,9 +334,11 @@ final class AccountProviderRuntime: ProviderRuntime {
             return try await antigravityUsage(token: tokens.accessToken)
         } catch is AntigravityUsageClient.TokenRefused {
             AppLog.debug(.auth, "\(account.cardID) usage read unauthorized; renewing the sign-in once")
-            let renewed = try await renewedTokens(tokens, grant: AntigravityLogin.refresh)
+            let renewed = account.authMethod == .localCLI
+                ? try await renewAntigravityTokenInMemory()
+                : try await renewedTokens(tokens, grant: AntigravityLogin.refresh).accessToken
             do {
-                return try await antigravityUsage(token: renewed.accessToken)
+                return try await antigravityUsage(token: renewed)
             } catch is AntigravityUsageClient.TokenRefused {
                 throw ProviderError.signInExpired(.antigravity)
             }
