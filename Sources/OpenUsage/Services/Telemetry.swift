@@ -7,6 +7,13 @@ protocol TelemetrySink: AnyObject {
     func flush()
 }
 
+/// Aix fork: nothing leaves this machine. PostHog is never set up, so its crash autocapture stays off too.
+@MainActor
+final class NoTelemetrySink: TelemetrySink {
+    func capture(_ event: String, _ properties: [String: Any]) {}
+    func flush() {}
+}
+
 @MainActor
 final class PostHogTelemetrySink: TelemetrySink {
     /// The project token baked into the build: a client-side, write-only key that ships in every

@@ -26,7 +26,7 @@ struct OpenUsageCLI {
                 fail("Could not open the OpenUsage settings domain.", code: 4)
             }
             let result = try UsageReader.read(defaults, providerID: arguments.providerID)
-            FileHandle.standardOutput.write(result.data)
+            FileHandle.standardOutput.write(AixEnvelope.reshape(result.data, brief: arguments.brief))
             FileHandle.standardOutput.write(Data("\n".utf8))
             if !result.hasSnapshots {
                 fail("nothing fetched yet; open OpenUsage and add or refresh an account", code: 4)
@@ -47,10 +47,13 @@ struct OpenUsageCLI {
 
     private static let help = """
     Usage: openusage [provider]
+           openusage brief [--json]
 
     Print the usage OpenUsage last fetched, as openusage.limits.v2 JSON, and exit. The app refreshes
     on its own schedule; this command never refreshes or signs in.
 
+    brief         The same data as openusage.brief.v1, for scripts written against the 0.7 Aix CLI.
+                  Spend and trends are empty: 0.8 no longer computes them.
     provider      An account id (codex@1a2b3c4d) or a provider kind (claude, codex) for every
                   account of that kind. Omit it for every account.
 
