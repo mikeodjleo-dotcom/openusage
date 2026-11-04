@@ -254,7 +254,12 @@ final class AntigravityProvider: ProviderRuntime {
         case .authFailed:
             return .authFailed
         case .ok(let data):
-            if let lines = AntigravityUsageMapper.parseQuotaSummary(data) {
+            if var lines = AntigravityUsageMapper.parseQuotaSummary(data) {
+                // An empty summary stays authoritative; only a summary with meters but no Gemini pool (Ultra) asks.
+                if !lines.isEmpty, !lines.contains(where: { $0.label == AntigravityMetric.sessionLabel }),
+                   case .ok(let quota) = await usageClient.cloudCode(path: AntigravityUsageClient.retrieveQuotaPath, token: token, userAgent: "antigravity", body: [:]) {
+                    lines = AntigravityUsageMapper.addingGeminiSession(to: lines, quotaBuckets: quota)
+                }
                 return .success(StrategyResult(plan: await loadPlan(token: token), lines: lines))
             }
             // 2xx but not a summary payload — the parser warned; fall to the legacy chain.

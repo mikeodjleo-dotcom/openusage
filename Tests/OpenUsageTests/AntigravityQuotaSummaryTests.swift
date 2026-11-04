@@ -39,6 +39,16 @@ final class AntigravityQuotaSummaryTests: XCTestCase {
 
     // MARK: - Parser
 
+    func testUltraSummaryGetsGeminiSessionFromPerModelQuota() throws {
+        let summary = AntigravityUsageMapper.parseQuotaSummary(Data(#"{"groups":[{"buckets":[{"bucketId":"3p-weekly","resetTime":"2026-11-11T11:20:19Z","remainingFraction":1}]}]}"#.utf8))!
+        let quota = Data(#"{"buckets":[{"modelId":"claude-sonnet-4-6","resetTime":"2026-11-04T16:20:19Z","remainingFraction":0.1},{"modelId":"gemini-tab","remainingFraction":0.2},{"modelId":"gemini-3-flash","resetTime":"2026-11-04T16:10:29Z","remainingFraction":0.75}]}"#.utf8)
+        let lines = AntigravityUsageMapper.addingGeminiSession(to: summary, quotaBuckets: quota)
+        guard case .progress(let label, let used, _, _, _, _, _) = lines[0] else { return XCTFail("no meter") }
+        XCTAssertEqual(label, AntigravityMetric.sessionLabel)
+        XCTAssertEqual(used, 25)
+        XCTAssertEqual(lines.count, 2)
+    }
+
     func testWrappedAndBarePayloadsProduceIdenticalFourLines() {
         let bare = AntigravityUsageMapper.parseQuotaSummary(Data("{\(fullGroupsJSON)}".utf8))
         let wrapped = AntigravityUsageMapper.parseQuotaSummary(Data("{\"response\":{\(fullGroupsJSON)}}".utf8))

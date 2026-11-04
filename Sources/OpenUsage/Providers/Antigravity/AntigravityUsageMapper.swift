@@ -80,6 +80,16 @@ enum AntigravityUsageMapper {
         }
     }
 
+    /// Ultra accounts get a summary with only the `3p-*` buckets; Google reports their Gemini pool only
+    /// per model through `retrieveUserQuota`. Adds that 5-hour reading as the Session meter when the
+    /// summary has none. There is no weekly Gemini figure to show, so that row stays "No data".
+    /// Only models with a `resetTime` count: a bucket without one is not a metered window.
+    static func addingGeminiSession(to lines: [MetricLine], quotaBuckets: Data) -> [MetricLine] {
+        let gemini = parseQuotaBuckets(quotaBuckets).filter { ($0.modelID ?? "").hasPrefix("gemini-") && $0.resetTime != nil }
+        guard let worst = gemini.min(by: { $0.remainingFraction < $1.remainingFraction }) else { return lines }
+        return [line(pool: AntigravityMetric.sessionLabel, fraction: worst.remainingFraction, resetTime: worst.resetTime, periodMs: MetricPeriod.sessionMs)] + lines
+    }
+
     // MARK: - Response parsing (legacy per-model endpoints)
 
     /// LS `GetUserStatus` → plan name + model configs. Nil when the body has no `userStatus`.
