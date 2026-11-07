@@ -14,19 +14,6 @@ extension AccountProviderRuntime {
     /// from it: Anthropic answers a grants read sent right after a usage read with a 429. A hub account
     /// reads its profile with its first usage read, so it shows its plan as soon as it appears.
     func refreshClaude(_ credential: AccountCredential) async throws -> ProviderUsage {
-        do {
-            return try await refreshClaudeLive(credential)
-        } catch {
-            // The endpoint is out of reach (429 all day on the worker Mac, or the sign-in can't be refreshed):
-            // show the local reading instead of a card frozen at its last good read.
-            guard !Task.isCancelled, let url = claudeLocalUsageURL, let lines = ClaudeLocalUsage.lines(at: url, now: now()) else { throw error }
-            AppLog.warn(LogTag.plugin("claude"), "usage read failed (\(error.localizedDescription)); showing local usage file")
-            let plan = claude.session?.planRead.value ?? claude.restoredPlan
-            return ProviderUsage(plan: plan, lines: lines, lineTitles: ClaudeUsageMapper.lineTitles(plan: plan))
-        }
-    }
-
-    private func refreshClaudeLive(_ credential: AccountCredential) async throws -> ProviderUsage {
         let session = claudeSession(for: credential)
         let forced = claude.forcedReadsPending
         claude.forcedReadsPending = false

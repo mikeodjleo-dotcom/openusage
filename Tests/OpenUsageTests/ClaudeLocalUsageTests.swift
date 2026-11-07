@@ -60,6 +60,20 @@ final class ClaudeLocalUsageFallbackTests: XCTestCase {
         XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly"])
     }
 
+    func testAnExpiredClaudeCodeLoginShowsTheLocalFile() async throws {
+        let account = Account(kind: .claude, label: "Claude Code")
+        let vault = InMemoryCredentialVault()
+        try vault.save(.localCLI, for: account.id)
+        let runtime = AccountProviderRuntime(account: account, vault: vault, http: RoutingHTTPClient { _ in .json("{}") })
+        var source = ClaudeCodeSource()
+        source.readKeychain = { _ in #"{"claudeAiOauth":{"accessToken":"old","expiresAt":1000}}"# }   // lapsed long ago
+        source.home = FileManager.default.temporaryDirectory.appending(path: "no-claude-\(UUID().uuidString)")
+        runtime.claudeCodeSource = source
+        runtime.claudeLocalUsageURL = try localFile()
+        let snapshot = try await runtime.refresh().get()
+        XCTAssertEqual(snapshot.lines.map(\.label), ["Session", "Weekly"])
+    }
+
     func testWithoutAPathThe429StillFails() async throws {
         let result = await (try runtime(localFile: nil)).refresh()
         guard case .failure = result else { return XCTFail("a 429 with no local file must still fail") }

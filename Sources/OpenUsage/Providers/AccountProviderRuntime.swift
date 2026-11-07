@@ -137,8 +137,24 @@ final class AccountProviderRuntime: ProviderRuntime {
         do {
             return .success(try await readSnapshot(using: loadCredential()))
         } catch {
+            if let local = claudeLocalSnapshot(after: error) { return .success(local) }
             return .failure(RefreshFailure(error: error))
         }
+    }
+
+    /// Aix fork: when a Claude card can't be read at all — the usage endpoint answers 429 all day on the worker
+    /// Mac, or Claude Code's own login there has lapsed because its jobs run on a long-lived token — show the
+    /// local usage file (see `ClaudeLocalUsage`) instead of a card frozen at its last good read.
+    private func claudeLocalSnapshot(after error: Error) -> ProviderSnapshot? {
+        guard account.kind == .claude, !Task.isCancelled, let url = claudeLocalUsageURL,
+              let lines = ClaudeLocalUsage.lines(at: url, now: now())
+        else { return nil }
+        AppLog.warn(LogTag.plugin("claude"), "\(account.cardID) usage read failed (\(error.localizedDescription)); showing local usage file")
+        let plan = claude.session?.planRead.value ?? claude.restoredPlan
+        var snapshot = ProviderSnapshot(provider: provider, plan: plan, lines: lines, notice: nil)
+        let titles = ClaudeUsageMapper.lineTitles(plan: plan)
+        snapshot.lineTitles = titles.isEmpty ? nil : titles
+        return snapshot
     }
 
     func loadCredential() async throws -> AccountCredential {
