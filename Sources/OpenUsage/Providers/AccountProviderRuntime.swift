@@ -27,6 +27,9 @@ final class AccountProviderRuntime: ProviderRuntime {
     var antigravityRenewal: (refreshToken: String, accessToken: String, expiresAt: Date)?
     var claudeCodeRead: Task<ClaudeCodeReading, Never>?
     var claudeKeychainNotBefore = Date.distantPast
+    /// Local Claude usage file read when the usage endpoint fails (see `ClaudeLocalUsage`). Off unless the
+    /// catalog turns it on, so tests never read a file on the machine running them.
+    var claudeLocalUsageURL: URL?
     /// One renewal at a time: a provider that rotates refresh tokens refuses a second renewal sent with
     /// the same one, so a caller that needs a renewal while one is in flight waits for its tokens, and a
     /// caller whose tokens another renewal already replaced takes the stored ones.

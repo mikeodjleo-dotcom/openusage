@@ -24,7 +24,9 @@ enum ProviderCatalog {
                     HubTunnel(link: link, kind: account.kind, keys: hubKeys, client: CLIProxyHubClient(http: http, gate: hubGate))
                 case _?: HubOff()
                 }
-                return AccountProviderRuntime(account: account, vault: vault, http: client, claudeSessions: claudeSessions)
+                let runtime = AccountProviderRuntime(account: account, vault: vault, http: client, claudeSessions: claudeSessions)
+                if account.kind == .claude, account.hub == nil { runtime.claudeLocalUsageURL = ClaudeLocalUsage.defaultURL }
+                return runtime
             }
             runtime.update(account)
             return runtime
