@@ -26,10 +26,12 @@ extension AntigravityLogin {
 
 struct AntigravityUsageClient: Sendable {
     static let unavailableMessage = "Antigravity usage is temporarily unavailable. Try again shortly."
-    // The daily endpoint can omit Gemini quotas from a successful response; prefer production.
+    // aix 11-08: daily first — it is what the Antigravity CLI's own `/quota` reads. Production answered the
+    // Amy Ultra account with a stale per-user Gemini bucket (100% used, 11-11 reset) while `/quota` and real
+    // Argon runs showed 62% left (11-14 reset). If daily omits buckets, production still fills the gaps.
     static let cloudCodeURLs = [
-        "https://cloudcode-pa.googleapis.com",
-        "https://daily-cloudcode-pa.googleapis.com"
+        "https://daily-cloudcode-pa.googleapis.com",
+        "https://cloudcode-pa.googleapis.com"
     ]
     static let loadCodeAssistPath = "/v1internal:loadCodeAssist"
     static let quotaSummaryPath = "/v1internal:retrieveUserQuotaSummary"

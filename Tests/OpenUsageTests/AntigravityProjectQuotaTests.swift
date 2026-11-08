@@ -62,6 +62,32 @@ final class AntigravityProjectQuotaTests: XCTestCase {
         XCTAssertEqual(refused.failure?.message, ProviderError.signInExpired(.antigravity).localizedDescription)
     }
 
+    func testDailyQuotaWinsOverProductionLikeTheCLI() async throws {
+        let account = Account(kind: .antigravity, label: "Google Account")
+        let vault = InMemoryCredentialVault()
+        try vault.save(.oauth(OAuthTokens(accessToken: "access", refreshToken: "refresh", expiresAt: .distantFuture)), for: account.id)
+        let template = #"{"groups":[{"displayName":"Gemini Models","buckets":[{"bucketId":"gemini-5h","remainingFraction":0.9,"window":"5h"},{"bucketId":"gemini-weekly","remainingFraction":WEEKLY,"window":"weekly"}]},{"displayName":"Claude and GPT models","buckets":[{"bucketId":"3p-5h","remainingFraction":1,"window":"5h"},{"bucketId":"3p-weekly","remainingFraction":1,"window":"weekly"}]}]}"#
+        let dailyBody = template.replacingOccurrences(of: "WEEKLY", with: "0.62")
+        let productionBody = template.replacingOccurrences(of: "WEEKLY", with: "0")
+        let http = RoutingHTTPClient { request in
+            switch request.url.path {
+            case AntigravityUsageClient.loadCodeAssistPath:
+                return HTTPResponse(statusCode: 200, headers: [:], body: Data(Self.loadCodeAssist.utf8))
+            case AntigravityUsageClient.quotaSummaryPath:
+                let daily = request.url.host() == "daily-cloudcode-pa.googleapis.com"
+                return HTTPResponse(statusCode: 200, headers: [:], body: Data((daily ? dailyBody : productionBody).utf8))
+            default:
+                return HTTPResponse(statusCode: 404, headers: [:], body: Data())
+            }
+        }
+        let snapshot = try await AccountProviderRuntime(account: account, vault: vault, http: http).refresh().get()
+
+        let weekly = try XCTUnwrap(snapshot.lines.first { $0.label == AntigravityMetric.weeklyLabel })
+        guard case .progress(_, let used, _, _, _, _) = weekly else { return XCTFail("weekly is not a progress line") }
+        XCTAssertEqual(used, 38)
+        XCTAssertEqual(http.requests.filter { $0.url.path == AntigravityUsageClient.quotaSummaryPath }.map { $0.url.host() }, ["daily-cloudcode-pa.googleapis.com"])
+    }
+
     func testEveryBaseOfflineIsUnreachable() async throws {
         let account = Account(kind: .antigravity, label: "Google Account")
         let vault = InMemoryCredentialVault()
