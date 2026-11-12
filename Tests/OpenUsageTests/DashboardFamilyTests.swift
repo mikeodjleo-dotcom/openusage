@@ -57,4 +57,21 @@ final class DashboardFamilyTests: XCTestCase {
         XCTAssertEqual(account(resetCount: 2).lines.map(\.descriptor.key), ["resets", "weekly"])
         XCTAssertEqual(account(resetCount: 0).lines.map(\.descriptor.key), ["weekly"])
     }
+
+    func testAShortWindowIsHiddenWhileTheWeeklyThatCapsItIsUsedUp() {
+        func keys(weeklyUsed: Double) -> [String] {
+            let samples = [
+                "session": WidgetData(title: "Session", kind: .percent, used: 0, limit: 100),
+                "weekly": WidgetData(title: "Weekly", kind: .percent, used: weeklyUsed, limit: 100),
+                "geminiPro": WidgetData(title: "Gemini 5h", kind: .percent, used: 0, limit: 100),
+            ]
+            let group = ProviderMetrics(
+                provider: Provider(id: "kimi@1", kind: .kimi),
+                metrics: ["session", "weekly", "geminiPro"].map { WidgetDescriptor(provider: Provider(id: "kimi", kind: .kimi), key: $0, metricLabel: $0, sample: samples[$0]!) }
+            )
+            return DashboardFamily.make(groups: [group]) { DashboardLine(descriptor: $0, data: $0.sample) }[0].accounts[0].lines.map(\.descriptor.key)
+        }
+        XCTAssertEqual(keys(weeklyUsed: 53), ["session", "weekly", "geminiPro"])
+        XCTAssertEqual(keys(weeklyUsed: 100), ["weekly", "geminiPro"])
+    }
 }

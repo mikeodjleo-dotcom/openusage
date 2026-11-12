@@ -49,7 +49,7 @@ extension DashboardFamily {
         for group in groups {
             let account = isWaiting(group.provider)
                 ? DashboardAccount(provider: group.provider, lines: [], waitingMetricIDs: group.metrics.map(\.id))
-                : DashboardAccount(provider: group.provider, lines: group.metrics.map(line).filter(\.isVisible))
+                : DashboardAccount(provider: group.provider, lines: hidingWindowsCappedBySpentWeekly(group.metrics.map(line).filter(\.isVisible)))
             let familyID = group.provider.kind.rawValue
             if let index = families.firstIndex(where: { $0.id == familyID }) {
                 families[index].accounts.append(account)
@@ -58,6 +58,18 @@ extension DashboardFamily {
             }
         }
         return families
+    }
+
+    /// Aix fork: a short window's key and the longer window that caps it. While the longer one is used up the short
+    /// one can't be spent, so its "100% left" only misleads (11-12: Gemini 5h / Kimi 5-Hour pinned at 100% with weekly at 0).
+    static let windowCaps: [String: String] = [
+        "session": "weekly", "daily": "weekly", "spark": "sparkWeekly",
+        "geminiPro": "geminiWeekly", "claude": "claudeWeekly",
+    ]
+
+    static func hidingWindowsCappedBySpentWeekly(_ lines: [DashboardLine], now: Date = Date()) -> [DashboardLine] {
+        let spent = Set(lines.filter { $0.data.meterState(now: now) == .spent }.map(\.descriptor.key))
+        return lines.filter { line in windowCaps[line.descriptor.key].map { !spent.contains($0) } ?? true }
     }
 }
 
