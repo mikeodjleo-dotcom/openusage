@@ -68,14 +68,14 @@ extension AccountProviderRuntime {
                 .percent(key: "geminiPro", provider: provider, title: "Gemini 5h",
                          metricLabel: AntigravityMetric.sessionLabel, sessionStartSignal: .zeroUsage)
                     .exportingLimit("geminiSession", unit: "percent"),
-                .percent(key: "geminiWeekly", provider: provider, title: "Gemini", metricLabel: AntigravityMetric.weeklyLabel)
+                .percent(key: "geminiWeekly", provider: provider, title: "Gemini Weekly", metricLabel: AntigravityMetric.weeklyLabel)
                     .exportingLimit("geminiWeekly", unit: "percent"),
                 .percent(key: "argonWeekly", provider: provider, title: "Argon", metricLabel: AntigravityMetric.argonWeeklyLabel)
                     .exportingLimit("argonWeekly", unit: "percent"),
                 .percent(key: "claude", provider: provider, title: "Claude 5h",
                          metricLabel: AntigravityMetric.claudeLabel, sessionStartSignal: .zeroUsage)
                     .exportingLimit("nonGeminiSession", unit: "percent"),
-                .percent(key: "claudeWeekly", provider: provider, title: "Claude", metricLabel: AntigravityMetric.claudeWeeklyLabel)
+                .percent(key: "claudeWeekly", provider: provider, title: "Claude Weekly", metricLabel: AntigravityMetric.claudeWeeklyLabel)
                     .exportingLimit("nonGeminiWeekly", unit: "percent")
             ]
         case .copilot where account.organization != nil:
