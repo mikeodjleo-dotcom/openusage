@@ -174,6 +174,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         guard let credential = stored else { throw refusedCredential }
         if credential == .localCLI, account.kind == .claude { return try await claudeCodeCredential() }
         if credential == .localCLI, account.kind == .antigravity { return try await antigravityLocalCredential() }
+        if credential == .localCLI, account.kind == .grok { return try grokLocalCredential() }
         if case .localCodex(let accountID) = credential { return try await codexLocalCredential(accountID: accountID) }
         return credential
     }
@@ -203,6 +204,7 @@ final class AccountProviderRuntime: ProviderRuntime {
         case .localCLI where account.kind == .claude: .unreachable(ClaudeCodeMessage.expired)
         case .localCLI where account.kind == .codex: codexLocalExpired
         case .localCLI where account.kind == .antigravity: .unreachable(AntigravityLocalMessage.expired)
+        case .localCLI where account.kind == .grok: .unreachable(GrokLocalMessage.expired)
         case .localCLI: .unavailable("\(account.kind.displayName) sign-in expired. Run kimi login in Terminal; OpenUsage picks it up on its next refresh.")
         }
     }

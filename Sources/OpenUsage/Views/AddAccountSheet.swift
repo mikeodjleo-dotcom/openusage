@@ -105,6 +105,7 @@ private struct MethodChoiceStep: View {
             switch provider {
             case .codex: "Use This Mac’s Codex Login"
             case .antigravity: "Use This Mac’s Antigravity Login"
+            case .grok: "Use This Mac’s Grok CLI Login"
             default: "Use This Mac’s Claude Code Login"
             }
         case .oauth, .apiKey: provider == .copilot ? "Sign In with GitHub" : "Sign In with Browser"
@@ -392,6 +393,8 @@ private struct LocalCLIStep: View {
             title: "Add \(provider.displayName)",
             message: provider == .claude
                 ? "OpenUsage reads Claude Code’s login on this Mac and never renews or changes it. macOS may ask for Keychain access: choose Always Allow."
+                : provider == .grok
+                ? "OpenUsage reads the Grok CLI’s login in ~/.grok/auth.json and never renews or changes it; the CLI keeps it fresh while you use it."
                 : provider == .antigravity
                 ? "OpenUsage reads Antigravity’s login on this Mac and never changes it; it renews the access token in memory only. macOS may ask for Keychain access: choose Always Allow."
                 : "OpenUsage reads and renews the sign-in the Kimi Code CLI keeps in ~/.kimi-code. Run kimi login first if you haven’t."
