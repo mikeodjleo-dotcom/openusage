@@ -75,7 +75,8 @@ enum ProviderKind: String, Codable, CaseIterable, Sendable {
         case .codex: [.oauth, .localCLI]
         case .antigravity: [.oauth, .localCLI]
         case .grok: [.oauth, .localCLI]   // Aix fork: localCLI reads ~/.grok/auth.json
-        case .cursor, .devin, .muse: [.oauth]
+        case .devin: [.oauth, .localCLI]   // Aix fork: localCLI reads ~/.local/share/devin/credentials.toml
+        case .cursor, .muse: [.oauth]
         case .copilot: [.oauth, .organizationToken]
         case .kimi: [.localCLI]
         case .ollama: [.apiKey(keyPage: URL(string: "https://ollama.com/settings/keys")!)]

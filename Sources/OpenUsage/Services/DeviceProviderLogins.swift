@@ -186,6 +186,7 @@ enum ProviderLoginCatalog {
         if method == .localCLI, kind == .claude { return ClaudeCodeLogin() }
         if method == .localCLI, kind == .antigravity { return AntigravityLocalLogin() }
         if method == .localCLI, kind == .grok { return GrokLocalLogin() }
+        if method == .localCLI, kind == .devin { return DevinLocalLogin() }
         return switch kind {
         case .claude: ClaudeLogin()
         case .codex: CodexLogin()
