@@ -33,12 +33,8 @@ struct DashboardLine: Identifiable {
     let data: WidgetData
     var id: String { descriptor.id }
 
-    // Spent reset grants remain available to CLI clients.
-    var isVisible: Bool {
-        guard data.hasData else { return false }
-        if data.showsResetExpiries { return data.resetCreditCount > 0 }
-        return true
-    }
+    // ponytail: 重置卡 0 张也显示（「0 available」），否则看不出是「没卡」还是「这家不支持」。
+    var isVisible: Bool { data.hasData }
 }
 
 extension DashboardFamily {
